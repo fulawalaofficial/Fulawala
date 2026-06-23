@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(): void { Schema::create('pooja_packets', function (Blueprint $table) { $table->id(); $table->string('packet_name'); $table->string('image')->nullable(); $table->text('description')->nullable(); $table->json('included_flowers'); $table->decimal('monthly_price',10,2); $table->decimal('weekly_price',10,2)->nullable(); $table->string('daily_quantity')->nullable(); $table->string('package_type')->nullable(); $table->string('status')->default('Active'); $table->timestamps(); }); } public function down(): void { Schema::dropIfExists('pooja_packets'); } };
