@@ -31,6 +31,9 @@
             'sale_price' => '',
         ];
     }
+
+    $selectedPackageType = old('package_type', $packet->package_type ?: 'Monthly');
+    $selectedStatus = old('status', $packet->status ?: 'Active');
 @endphp
 
 <div class="space-y-6">
@@ -97,10 +100,10 @@
                     <label class="block text-sm font-black text-slate-700 mb-1">Package Type *</label>
                     <select name="package_type"
                             class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
-                        <option value="Monthly" @selected(old('package_type', $packet->package_type ?: 'Monthly') === 'Monthly')>Monthly</option>
-                        <option value="Three Month" @selected(old('package_type', $packet->package_type) === 'Three Month')>Three Month</option>
-                        <option value="Six Month" @selected(old('package_type', $packet->package_type) === 'Six Month')>Six Month</option>
-                        <option value="One Year" @selected(old('package_type', $packet->package_type) === 'One Year')>One Year</option>
+                        <option value="Monthly" {{ $selectedPackageType == 'Monthly' ? 'selected' : '' }}>Monthly</option>
+                        <option value="Three Month" {{ $selectedPackageType == 'Three Month' ? 'selected' : '' }}>Three Month</option>
+                        <option value="Six Month" {{ $selectedPackageType == 'Six Month' ? 'selected' : '' }}>Six Month</option>
+                        <option value="One Year" {{ $selectedPackageType == 'One Year' ? 'selected' : '' }}>One Year</option>
                     </select>
                 </div>
 
@@ -146,8 +149,8 @@
                     <label class="block text-sm font-black text-slate-700 mb-1">Status *</label>
                     <select name="status"
                             class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
-                        <option value="Active" @selected(old('status', $packet->status ?: 'Active') === 'Active')>Active</option>
-                        <option value="Inactive" @selected(old('status', $packet->status) === 'Inactive')>Inactive</option>
+                        <option value="Active" {{ $selectedStatus == 'Active' ? 'selected' : '' }}>Active</option>
+                        <option value="Inactive" {{ $selectedStatus == 'Inactive' ? 'selected' : '' }}>Inactive</option>
                     </select>
                 </div>
 
@@ -203,7 +206,7 @@
                                                 <option value="{{ $flower->id }}"
                                                         data-unit="{{ $flower->unit }}"
                                                         data-price="{{ $flower->price }}"
-                                                        @selected((string)($item['flower_id'] ?? '') === (string)$flower->id)>
+                                                        {{ (string)($item['flower_id'] ?? '') == (string)$flower->id ? 'selected' : '' }}>
                                                     {{ $flower->flower_name }} - ₹{{ $flower->price }} / {{ $flower->unit }}
                                                 </option>
                                             @endforeach

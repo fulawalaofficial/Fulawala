@@ -37,31 +37,26 @@ class PoojaPacket extends Model
 
     public function getPackageTypeLabelAttribute()
     {
-        switch ($this->package_type) {
-            case 'Monthly':
-                return 'Monthly';
-            case 'Three Month':
-                return 'Three Month';
-            case 'Six Month':
-                return 'Six Month';
-            case 'One Year':
-                return 'One Year';
-            default:
-                return $this->package_type ?: 'Monthly';
+        if ($this->package_type) {
+            return $this->package_type;
         }
+
+        return 'Monthly';
     }
 
     public function getFlowerItemsAttribute()
     {
-        $items = $this->included_flowers ?? [];
+        $items = $this->included_flowers;
 
         if (!is_array($items)) {
             return [];
         }
 
-        return collect($items)->map(function ($item) {
+        $finalItems = [];
+
+        foreach ($items as $item) {
             if (is_string($item)) {
-                return [
+                $finalItems[] = [
                     'flower_id' => null,
                     'flower_name' => $item,
                     'unit' => '',
@@ -70,24 +65,19 @@ class PoojaPacket extends Model
                     'mrp_price' => 0,
                     'sale_price' => 0,
                 ];
+            } elseif (is_array($item)) {
+                $finalItems[] = [
+                    'flower_id' => $item['flower_id'] ?? null,
+                    'flower_name' => $item['flower_name'] ?? '',
+                    'unit' => $item['unit'] ?? '',
+                    'quantity' => $item['quantity'] ?? '',
+                    'price' => $item['price'] ?? 0,
+                    'mrp_price' => $item['mrp_price'] ?? 0,
+                    'sale_price' => $item['sale_price'] ?? 0,
+                ];
             }
+        }
 
-            return [
-                'flower_id' => $item['flower_id'] ?? null,
-                'flower_name' => $item['flower_name'] ?? '',
-                'unit' => $item['unit'] ?? '',
-                'quantity' => $item['quantity'] ?? '',
-                'price' => $item['price'] ?? 0,
-                'mrp_price' => $item['mrp_price'] ?? 0,
-                'sale_price' => $item['sale_price'] ?? 0,
-            ];
-        })->values()->all();
-    }
-
-    public function getFlowerSummaryAttribute()
-    {
-        return collect($this->flower_items)->map(function ($item) {
-            return trim(($item['flower_name'] ?? '') . ' - ' . ($item['quantity'] ?? '') . ' ' . ($item['unit'] ?? ''));
-        })->filter()->implode(', ');
+        return $finalItems;
     }
 }

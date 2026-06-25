@@ -58,10 +58,10 @@
                 <select name="package_type"
                         class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                     <option value="">All Types</option>
-                    <option value="Monthly" @selected(($packageType ?? '') === 'Monthly')>Monthly</option>
-                    <option value="Three Month" @selected(($packageType ?? '') === 'Three Month')>Three Month</option>
-                    <option value="Six Month" @selected(($packageType ?? '') === 'Six Month')>Six Month</option>
-                    <option value="One Year" @selected(($packageType ?? '') === 'One Year')>One Year</option>
+                    <option value="Monthly" {{ ($packageType ?? '') == 'Monthly' ? 'selected' : '' }}>Monthly</option>
+                    <option value="Three Month" {{ ($packageType ?? '') == 'Three Month' ? 'selected' : '' }}>Three Month</option>
+                    <option value="Six Month" {{ ($packageType ?? '') == 'Six Month' ? 'selected' : '' }}>Six Month</option>
+                    <option value="One Year" {{ ($packageType ?? '') == 'One Year' ? 'selected' : '' }}>One Year</option>
                 </select>
             </div>
 
@@ -70,8 +70,8 @@
                 <select name="status"
                         class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                     <option value="">All Status</option>
-                    <option value="Active" @selected(($status ?? '') === 'Active')>Active</option>
-                    <option value="Inactive" @selected(($status ?? '') === 'Inactive')>Inactive</option>
+                    <option value="Active" {{ ($status ?? '') == 'Active' ? 'selected' : '' }}>Active</option>
+                    <option value="Inactive" {{ ($status ?? '') == 'Inactive' ? 'selected' : '' }}>Inactive</option>
                 </select>
             </div>
 
@@ -105,6 +105,11 @@
 
                 <tbody>
                     @forelse($packets as $packet)
+                        @php
+                            $desc = $packet->description ?? '';
+                            $shortDesc = strlen($desc) > 45 ? substr($desc, 0, 45) . '...' : $desc;
+                        @endphp
+
                         <tr class="border-b border-slate-100 hover:bg-orange-50/40 transition">
                             <td class="p-4">
                                 <div class="flex items-center gap-3">
@@ -121,7 +126,7 @@
                                     <div>
                                         <div class="font-black text-slate-900">{{ $packet->packet_name }}</div>
                                         <div class="text-xs text-slate-500 mt-1">
-                                            {{ Str::limit($packet->description, 45) }}
+                                            {{ $shortDesc }}
                                         </div>
                                     </div>
                                 </div>
