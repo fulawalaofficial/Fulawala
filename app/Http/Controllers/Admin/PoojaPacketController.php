@@ -55,7 +55,6 @@ class PoojaPacketController extends Controller
     public function create()
     {
         $packet = new PoojaPacket();
-
         $flowers = $this->getFlowersForForm();
 
         return view('admin.pooja-packets.form', compact('packet', 'flowers'));
@@ -79,7 +78,6 @@ class PoojaPacketController extends Controller
     public function edit(PoojaPacket $poojaPacket)
     {
         $packet = $poojaPacket;
-
         $flowers = $this->getFlowersForForm();
 
         return view('admin.pooja-packets.form', compact('packet', 'flowers'));
@@ -134,8 +132,6 @@ class PoojaPacketController extends Controller
             'description' => ['nullable', 'string'],
 
             'package_type' => ['required', 'in:Monthly,Three Month,Six Month,One Year'],
-            'mrp_price' => ['required', 'numeric', 'min:0'],
-            'sale_price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:Active,Inactive'],
 
             'flower_ids' => ['required', 'array', 'min:1'],
@@ -182,6 +178,8 @@ class PoojaPacketController extends Controller
         $flowers = FlowerProduct::whereIn('id', $validFlowerIds)->get()->keyBy('id');
 
         $includedFlowers = [];
+        $packageMrpTotal = 0;
+        $packageSaleTotal = 0;
 
         foreach ($flowerIds as $index => $flowerId) {
             if (!$flowerId) {
@@ -206,14 +204,27 @@ class PoojaPacketController extends Controller
                 ]);
             }
 
+            $quantity = (float) $quantity;
+            $price = (float) $price;
+            $flowerMrp = $flowerMrp !== '' ? (float) $flowerMrp : $price;
+            $flowerSale = $flowerSale !== '' ? (float) $flowerSale : $price;
+
+            $lineMrpTotal = $quantity * $flowerMrp;
+            $lineSaleTotal = $quantity * $flowerSale;
+
+            $packageMrpTotal += $lineMrpTotal;
+            $packageSaleTotal += $lineSaleTotal;
+
             $includedFlowers[] = [
                 'flower_id' => (int) $flower->id,
                 'flower_name' => $flower->flower_name,
                 'unit' => $unit,
-                'quantity' => (float) $quantity,
-                'price' => (float) $price,
-                'mrp_price' => (float) ($flowerMrp !== '' ? $flowerMrp : $price),
-                'sale_price' => (float) ($flowerSale !== '' ? $flowerSale : $price),
+                'quantity' => $quantity,
+                'price' => $price,
+                'mrp_price' => $flowerMrp,
+                'sale_price' => $flowerSale,
+                'line_mrp_total' => $lineMrpTotal,
+                'line_sale_total' => $lineSaleTotal,
             ];
         }
 
@@ -226,13 +237,16 @@ class PoojaPacketController extends Controller
         $data['included_flowers'] = $includedFlowers;
         $data['duration_months'] = $durationMap[$data['package_type']] ?? 1;
 
-        // Existing mobile app compatibility
-        $data['monthly_price'] = $data['sale_price'];
+        // Auto calculated package totals
+        $data['mrp_price'] = $packageMrpTotal;
+        $data['sale_price'] = $packageSaleTotal;
+
+        // Keep old mobile app/API compatible
+        $data['monthly_price'] = $packageSaleTotal;
         $data['weekly_price'] = null;
         $data['daily_quantity'] = null;
 
         unset(
-            $data['image'],
             $data['flower_ids'],
             $data['flower_units'],
             $data['quantities'],
