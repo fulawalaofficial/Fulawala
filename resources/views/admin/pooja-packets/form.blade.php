@@ -1,17 +1,9 @@
 @extends('admin.layout')
 
-@section('title', $packet->exists ? 'Edit Pooja Packet' : 'Add Pooja Packet')
+@section('title', $packet->exists ? 'Edit Pooja Package' : 'Add Pooja Package')
 
 @section('content')
 @php
-    $durationOptions = [
-        1 => 'One Month',
-        2 => 'Two Months',
-        3 => 'Three Months',
-        6 => 'Six Months',
-        12 => 'One Year',
-    ];
-
     $items = [];
 
     if (is_array(old('flower_ids'))) {
@@ -20,8 +12,9 @@
                 'flower_id' => $flowerId,
                 'unit' => old('flower_units.' . $index),
                 'quantity' => old('quantities.' . $index),
-                'mrp_price' => old('mrp_prices.' . $index),
-                'sale_price' => old('sale_prices.' . $index),
+                'price' => old('prices.' . $index),
+                'mrp_price' => old('flower_mrp_prices.' . $index),
+                'sale_price' => old('flower_sale_prices.' . $index),
             ];
         }
     } else {
@@ -33,6 +26,7 @@
             'flower_id' => '',
             'unit' => '',
             'quantity' => '',
+            'price' => '',
             'mrp_price' => '',
             'sale_price' => '',
         ];
@@ -43,20 +37,20 @@
 
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-            <p class="text-sm font-semibold text-orange-600 uppercase tracking-wide">
-                {{ $packet->exists ? 'Update Packet' : 'Create Packet' }}
+            <p class="text-sm font-bold text-orange-600 uppercase tracking-wide">
+                {{ $packet->exists ? 'Update Package' : 'Create Package' }}
             </p>
             <h1 class="text-3xl font-black text-slate-900">
-                {{ $packet->exists ? 'Edit Pooja Packet' : 'Add Pooja Packet' }}
+                {{ $packet->exists ? 'Edit Pooja Package' : 'Add Pooja Package' }}
             </h1>
             <p class="text-slate-500 mt-1">
-                Select multiple flowers and set unit, quantity, MRP, sale price and packet duration.
+                Add package photo, package type, price and multiple flowers with quantity.
             </p>
         </div>
 
         <a href="{{ route('admin.pooja-packets.index') }}"
            class="inline-flex items-center justify-center px-5 py-3 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition">
-            Back to List
+            Back
         </a>
     </div>
 
@@ -72,6 +66,7 @@
     @endif
 
     <form method="POST"
+          enctype="multipart/form-data"
           action="{{ $packet->exists ? route('admin.pooja-packets.update', $packet) : route('admin.pooja-packets.store') }}"
           class="space-y-6">
 
@@ -83,79 +78,68 @@
 
         <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-orange-50 to-yellow-50 border-b border-orange-100 px-6 py-5">
-                <h2 class="text-xl font-black text-slate-900">Packet Basic Details</h2>
-                <p class="text-sm text-slate-500 mt-1">Enter packet name, duration, price and status.</p>
+                <h2 class="text-xl font-black text-slate-900">Package Details</h2>
+                <p class="text-sm text-slate-500 mt-1">Enter package name, type, photo, MRP and sale price.</p>
             </div>
 
             <div class="p-6 grid md:grid-cols-2 gap-5">
+
                 <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Packet Name *</label>
+                    <label class="block text-sm font-black text-slate-700 mb-1">Package Name *</label>
                     <input type="text"
                            name="packet_name"
                            value="{{ old('packet_name', $packet->packet_name) }}"
-                           placeholder="Example: Daily Pooja Premium Packet"
+                           placeholder="Example: Premium Daily Pooja Package"
                            class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Packet Duration *</label>
-                    <select name="duration_months"
+                    <label class="block text-sm font-black text-slate-700 mb-1">Package Type *</label>
+                    <select name="package_type"
                             class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
-                        @foreach($durationOptions as $value => $label)
-                            <option value="{{ $value }}" @selected((int) old('duration_months', $packet->duration_months ?: 1) === $value)>
-                                {{ $label }}
-                            </option>
-                        @endforeach
+                        <option value="Monthly" @selected(old('package_type', $packet->package_type ?: 'Monthly') === 'Monthly')>Monthly</option>
+                        <option value="Three Month" @selected(old('package_type', $packet->package_type) === 'Three Month')>Three Month</option>
+                        <option value="Six Month" @selected(old('package_type', $packet->package_type) === 'Six Month')>Six Month</option>
+                        <option value="One Year" @selected(old('package_type', $packet->package_type) === 'One Year')>One Year</option>
                     </select>
                 </div>
 
                 <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Monthly Price *</label>
+                    <label class="block text-sm font-black text-slate-700 mb-1">Package MRP Price *</label>
                     <input type="number"
                            step="0.01"
                            min="0"
-                           name="monthly_price"
-                           value="{{ old('monthly_price', $packet->monthly_price) }}"
+                           name="mrp_price"
+                           value="{{ old('mrp_price', $packet->mrp_price) }}"
+                           placeholder="Example: 1500"
+                           class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-black text-slate-700 mb-1">Package Sale Price *</label>
+                    <input type="number"
+                           step="0.01"
+                           min="0"
+                           name="sale_price"
+                           value="{{ old('sale_price', $packet->sale_price) }}"
                            placeholder="Example: 999"
                            class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Weekly Price</label>
-                    <input type="number"
-                           step="0.01"
-                           min="0"
-                           name="weekly_price"
-                           value="{{ old('weekly_price', $packet->weekly_price) }}"
-                           placeholder="Example: 299"
-                           class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Daily Quantity</label>
-                    <input type="text"
-                           name="daily_quantity"
-                           value="{{ old('daily_quantity', $packet->daily_quantity) }}"
-                           placeholder="Example: 250 gm / 1 packet daily"
-                           class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Package Type</label>
-                    <input type="text"
-                           name="package_type"
-                           value="{{ old('package_type', $packet->package_type) }}"
-                           placeholder="Example: Basic / Premium / Temple Special"
-                           class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Image URL</label>
-                    <input type="text"
+                    <label class="block text-sm font-black text-slate-700 mb-1">Package Photo</label>
+                    <input type="file"
                            name="image"
-                           value="{{ old('image', $packet->image) }}"
-                           placeholder="Optional image path or URL"
-                           class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
+                           accept="image/*"
+                           class="w-full border border-slate-200 rounded-xl px-4 py-3 bg-white focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
+
+                    @if($packet->image)
+                        <div class="mt-3">
+                            <img src="{{ asset($packet->image) }}"
+                                 alt="Package Photo"
+                                 class="w-28 h-28 rounded-2xl object-cover border border-orange-100">
+                        </div>
+                    @endif
                 </div>
 
                 <div>
@@ -171,7 +155,7 @@
                     <label class="block text-sm font-black text-slate-700 mb-1">Description</label>
                     <textarea name="description"
                               rows="4"
-                              placeholder="Write packet details..."
+                              placeholder="Write package description..."
                               class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">{{ old('description', $packet->description) }}</textarea>
                 </div>
             </div>
@@ -180,8 +164,10 @@
         <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-green-50 to-orange-50 border-b border-slate-100 px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h2 class="text-xl font-black text-slate-900">Select Flowers</h2>
-                    <p class="text-sm text-slate-500 mt-1">Add multiple flowers with quantity, unit, MRP and sale price.</p>
+                    <h2 class="text-xl font-black text-slate-900">Package Flowers</h2>
+                    <p class="text-sm text-slate-500 mt-1">
+                        Select multiple flowers and add unit, quantity, price, MRP and sale price.
+                    </p>
                 </div>
 
                 <button type="button"
@@ -192,31 +178,16 @@
             </div>
 
             <div class="p-6">
-                <div class="grid md:grid-cols-2 gap-4 mb-5">
-                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5">
-                        <p class="text-sm font-bold text-slate-500">Total MRP</p>
-                        <h3 class="text-2xl font-black text-slate-900 mt-1">
-                            ₹<span id="totalMrp">0.00</span>
-                        </h3>
-                    </div>
-
-                    <div class="bg-orange-50 border border-orange-100 rounded-2xl p-5">
-                        <p class="text-sm font-bold text-orange-600">Total Sale Price</p>
-                        <h3 class="text-2xl font-black text-orange-700 mt-1">
-                            ₹<span id="totalSale">0.00</span>
-                        </h3>
-                    </div>
-                </div>
-
                 <div class="overflow-x-auto border border-slate-200 rounded-2xl">
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 border-b border-slate-200">
                             <tr>
                                 <th class="p-3 text-left min-w-[240px]">Flower *</th>
-                                <th class="p-3 text-left min-w-[120px]">Unit *</th>
-                                <th class="p-3 text-left min-w-[120px]">Quantity *</th>
-                                <th class="p-3 text-left min-w-[130px]">MRP *</th>
-                                <th class="p-3 text-left min-w-[130px]">Sale Price *</th>
+                                <th class="p-3 text-left min-w-[110px]">Unit *</th>
+                                <th class="p-3 text-left min-w-[110px]">Quantity *</th>
+                                <th class="p-3 text-left min-w-[120px]">Price *</th>
+                                <th class="p-3 text-left min-w-[120px]">MRP</th>
+                                <th class="p-3 text-left min-w-[120px]">Sale Price</th>
                                 <th class="p-3 text-center min-w-[90px]">Action</th>
                             </tr>
                         </thead>
@@ -232,7 +203,7 @@
                                                 <option value="{{ $flower->id }}"
                                                         data-unit="{{ $flower->unit }}"
                                                         data-price="{{ $flower->price }}"
-                                                        @selected((string) ($item['flower_id'] ?? '') === (string) $flower->id)>
+                                                        @selected((string)($item['flower_id'] ?? '') === (string)$flower->id)>
                                                     {{ $flower->flower_name }} - ₹{{ $flower->price }} / {{ $flower->unit }}
                                                 </option>
                                             @endforeach
@@ -243,7 +214,7 @@
                                         <input type="text"
                                                name="flower_units[]"
                                                value="{{ $item['unit'] ?? '' }}"
-                                               placeholder="kg / gm / pcs"
+                                               placeholder="kg/gm/pcs"
                                                class="unit-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                                     </td>
 
@@ -261,7 +232,17 @@
                                         <input type="number"
                                                step="0.01"
                                                min="0"
-                                               name="mrp_prices[]"
+                                               name="prices[]"
+                                               value="{{ $item['price'] ?? '' }}"
+                                               placeholder="Price"
+                                               class="price-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
+                                    </td>
+
+                                    <td class="p-3">
+                                        <input type="number"
+                                               step="0.01"
+                                               min="0"
+                                               name="flower_mrp_prices[]"
                                                value="{{ $item['mrp_price'] ?? '' }}"
                                                placeholder="MRP"
                                                class="mrp-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
@@ -271,9 +252,9 @@
                                         <input type="number"
                                                step="0.01"
                                                min="0"
-                                               name="sale_prices[]"
+                                               name="flower_sale_prices[]"
                                                value="{{ $item['sale_price'] ?? '' }}"
-                                               placeholder="Sale Price"
+                                               placeholder="Sale"
                                                class="sale-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                                     </td>
 
@@ -291,7 +272,7 @@
                 </div>
 
                 <p class="text-xs text-slate-500 mt-3">
-                    Tip: When you select a flower, unit, MRP and sale price are auto-filled from flower product price. You can edit them manually.
+                    When you select a flower, unit and price are auto-filled from the flower product.
                 </p>
             </div>
         </div>
@@ -304,7 +285,7 @@
 
             <button type="submit"
                     class="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 rounded-xl font-black shadow-lg shadow-orange-200 transition">
-                {{ $packet->exists ? 'Update Packet' : 'Save Packet' }}
+                {{ $packet->exists ? 'Update Package' : 'Save Package' }}
             </button>
         </div>
     </form>
@@ -327,36 +308,27 @@
         </td>
 
         <td class="p-3">
-            <input type="text"
-                   name="flower_units[]"
-                   placeholder="kg / gm / pcs"
+            <input type="text" name="flower_units[]" placeholder="kg/gm/pcs"
                    class="unit-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
         </td>
 
         <td class="p-3">
-            <input type="number"
-                   step="0.01"
-                   min="0"
-                   name="quantities[]"
-                   placeholder="Qty"
+            <input type="number" step="0.01" min="0" name="quantities[]" placeholder="Qty"
                    class="qty-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
         </td>
 
         <td class="p-3">
-            <input type="number"
-                   step="0.01"
-                   min="0"
-                   name="mrp_prices[]"
-                   placeholder="MRP"
+            <input type="number" step="0.01" min="0" name="prices[]" placeholder="Price"
+                   class="price-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
+        </td>
+
+        <td class="p-3">
+            <input type="number" step="0.01" min="0" name="flower_mrp_prices[]" placeholder="MRP"
                    class="mrp-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
         </td>
 
         <td class="p-3">
-            <input type="number"
-                   step="0.01"
-                   min="0"
-                   name="sale_prices[]"
-                   placeholder="Sale Price"
+            <input type="number" step="0.01" min="0" name="flower_sale_prices[]" placeholder="Sale"
                    class="sale-input w-full border border-slate-200 rounded-xl px-3 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
         </td>
 
@@ -375,30 +347,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const flowerRows = document.getElementById('flowerRows');
     const addFlowerRowButton = document.getElementById('addFlowerRow');
     const flowerRowTemplate = document.getElementById('flowerRowTemplate');
-    const totalMrpElement = document.getElementById('totalMrp');
-    const totalSaleElement = document.getElementById('totalSale');
-
-    function parseAmount(value) {
-        const number = parseFloat(value);
-        return isNaN(number) ? 0 : number;
-    }
-
-    function calculateTotals() {
-        let totalMrp = 0;
-        let totalSale = 0;
-
-        flowerRows.querySelectorAll('[data-flower-row]').forEach(function (row) {
-            const quantity = parseAmount(row.querySelector('.qty-input')?.value);
-            const mrp = parseAmount(row.querySelector('.mrp-input')?.value);
-            const sale = parseAmount(row.querySelector('.sale-input')?.value);
-
-            totalMrp += quantity * mrp;
-            totalSale += quantity * sale;
-        });
-
-        totalMrpElement.textContent = totalMrp.toFixed(2);
-        totalSaleElement.textContent = totalSale.toFixed(2);
-    }
 
     function fillFlowerDetails(select) {
         const selectedOption = select.options[select.selectedIndex];
@@ -408,18 +356,13 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const unitInput = row.querySelector('.unit-input');
-        const mrpInput = row.querySelector('.mrp-input');
-        const saleInput = row.querySelector('.sale-input');
-
         const unit = selectedOption.dataset.unit || '';
         const price = selectedOption.dataset.price || '';
 
-        unitInput.value = unit;
-        mrpInput.value = price;
-        saleInput.value = price;
-
-        calculateTotals();
+        row.querySelector('.unit-input').value = unit;
+        row.querySelector('.price-input').value = price;
+        row.querySelector('.mrp-input').value = price;
+        row.querySelector('.sale-input').value = price;
     }
 
     function bindRowEvents(row) {
@@ -430,10 +373,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 fillFlowerDetails(select);
             });
         }
-
-        row.querySelectorAll('input').forEach(function (input) {
-            input.addEventListener('input', calculateTotals);
-        });
     }
 
     flowerRows.querySelectorAll('[data-flower-row]').forEach(bindRowEvents);
@@ -444,7 +383,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         flowerRows.appendChild(clone);
         bindRowEvents(newRow);
-        calculateTotals();
     });
 
     flowerRows.addEventListener('click', function (event) {
@@ -462,10 +400,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         removeButton.closest('[data-flower-row]').remove();
-        calculateTotals();
     });
-
-    calculateTotals();
 });
 </script>
 @endsection

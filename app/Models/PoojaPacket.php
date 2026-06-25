@@ -11,6 +11,8 @@ class PoojaPacket extends Model
         'image',
         'description',
         'included_flowers',
+        'mrp_price',
+        'sale_price',
         'monthly_price',
         'weekly_price',
         'daily_quantity',
@@ -21,6 +23,8 @@ class PoojaPacket extends Model
 
     protected $casts = [
         'included_flowers' => 'array',
+        'mrp_price' => 'decimal:2',
+        'sale_price' => 'decimal:2',
         'monthly_price' => 'decimal:2',
         'weekly_price' => 'decimal:2',
         'duration_months' => 'integer',
@@ -31,19 +35,23 @@ class PoojaPacket extends Model
         return $this->hasMany(Subscription::class, 'packet_id');
     }
 
-    public function getDurationLabelAttribute(): string
+    public function getPackageTypeLabelAttribute()
     {
-        return match ((int) $this->duration_months) {
-            1 => 'One Month',
-            2 => 'Two Months',
-            3 => 'Three Months',
-            6 => 'Six Months',
-            12 => 'One Year',
-            default => $this->duration_months . ' Months',
-        };
+        switch ($this->package_type) {
+            case 'Monthly':
+                return 'Monthly';
+            case 'Three Month':
+                return 'Three Month';
+            case 'Six Month':
+                return 'Six Month';
+            case 'One Year':
+                return 'One Year';
+            default:
+                return $this->package_type ?: 'Monthly';
+        }
     }
 
-    public function getFlowerItemsAttribute(): array
+    public function getFlowerItemsAttribute()
     {
         $items = $this->included_flowers ?? [];
 
@@ -58,6 +66,7 @@ class PoojaPacket extends Model
                     'flower_name' => $item,
                     'unit' => '',
                     'quantity' => '',
+                    'price' => 0,
                     'mrp_price' => 0,
                     'sale_price' => 0,
                 ];
@@ -68,23 +77,17 @@ class PoojaPacket extends Model
                 'flower_name' => $item['flower_name'] ?? '',
                 'unit' => $item['unit'] ?? '',
                 'quantity' => $item['quantity'] ?? '',
+                'price' => $item['price'] ?? 0,
                 'mrp_price' => $item['mrp_price'] ?? 0,
                 'sale_price' => $item['sale_price'] ?? 0,
             ];
         })->values()->all();
     }
 
-    public function getItemsTotalMrpAttribute(): float
+    public function getFlowerSummaryAttribute()
     {
-        return collect($this->flower_items)->sum(function ($item) {
-            return (float) ($item['quantity'] ?? 0) * (float) ($item['mrp_price'] ?? 0);
-        });
-    }
-
-    public function getItemsTotalSaleAttribute(): float
-    {
-        return collect($this->flower_items)->sum(function ($item) {
-            return (float) ($item['quantity'] ?? 0) * (float) ($item['sale_price'] ?? 0);
-        });
+        return collect($this->flower_items)->map(function ($item) {
+            return trim(($item['flower_name'] ?? '') . ' - ' . ($item['quantity'] ?? '') . ' ' . ($item['unit'] ?? ''));
+        })->filter()->implode(', ');
     }
 }

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\FlowerProduct;
 use App\Models\PoojaPacket;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class PoojaPacketController extends Controller
@@ -14,6 +16,7 @@ class PoojaPacketController extends Controller
     {
         $search = trim($request->get('search', ''));
         $status = $request->get('status', '');
+        $packageType = $request->get('package_type', '');
 
         $query = PoojaPacket::query();
 
@@ -29,6 +32,10 @@ class PoojaPacketController extends Controller
             $query->where('status', $status);
         }
 
+        if (in_array($packageType, ['Monthly', 'Three Month', 'Six Month', 'One Year'])) {
+            $query->where('package_type', $packageType);
+        }
+
         $packets = $query->latest()->paginate(20)->withQueryString();
 
         $stats = [
@@ -37,20 +44,33 @@ class PoojaPacketController extends Controller
             'inactive' => PoojaPacket::where('status', 'Inactive')->count(),
         ];
 
-        return view('admin.pooja-packets.index', compact('packets', 'stats', 'search', 'status'));
+        return view('admin.pooja-packets.index', compact(
+            'packets',
+            'stats',
+            'search',
+            'status',
+            'packageType'
+        ));
     }
 
     public function create()
     {
         $packet = new PoojaPacket();
-        $flowers = $this->flowersForForm($packet);
+
+        $flowers = FlowerProduct::query()
+            ->where('status', 'Active')
+            ->orderBy('flower_name')
+            ->get();
 
         return view('admin.pooja-packets.form', compact('packet', 'flowers'));
     }
 
     public function store(Request $request)
     {
-        PoojaPacket::create($this->validated($request));
+        $data = $this->validated($request);
+        $data['image'] = $this->uploadImage($request);
+
+        PoojaPacket::create($data);
 
         return redirect()
             ->route('admin.pooja-packets.index')
@@ -60,36 +80,16 @@ class PoojaPacketController extends Controller
     public function edit(PoojaPacket $poojaPacket)
     {
         $packet = $poojaPacket;
-        $flowers = $this->flowersForForm($packet);
 
-        return view('admin.pooja-packets.form', compact('packet', 'flowers'));
-    }
-
-    public function update(Request $request, PoojaPacket $poojaPacket)
-    {
-        $poojaPacket->update($this->validated($request));
-
-        return redirect()
-            ->route('admin.pooja-packets.index')
-            ->with('success', 'Pooja packet updated successfully.');
-    }
-
-    public function destroy(PoojaPacket $poojaPacket)
-    {
-        $poojaPacket->delete();
-
-        return back()->with('success', 'Pooja packet deleted successfully.');
-    }
-
-    private function flowersForForm(PoojaPacket $packet)
-    {
         $selectedFlowerIds = collect($packet->included_flowers ?? [])
-            ->map(fn ($item) => is_array($item) ? ($item['flower_id'] ?? null) : null)
+            ->map(function ($item) {
+                return is_array($item) ? ($item['flower_id'] ?? null) : null;
+            })
             ->filter()
             ->unique()
             ->values();
 
-        return FlowerProduct::query()
+        $flowers = FlowerProduct::query()
             ->where(function ($query) use ($selectedFlowerIds) {
                 $query->where('status', 'Active');
 
@@ -99,38 +99,80 @@ class PoojaPacketController extends Controller
             })
             ->orderBy('flower_name')
             ->get();
+
+        return view('admin.pooja-packets.form', compact('packet', 'flowers'));
     }
 
-    private function validated(Request $request): array
+    public function update(Request $request, PoojaPacket $poojaPacket)
+    {
+        $data = $this->validated($request);
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $this->uploadImage($request, $poojaPacket);
+        }
+
+        $poojaPacket->update($data);
+
+        return redirect()
+            ->route('admin.pooja-packets.index')
+            ->with('success', 'Pooja packet updated successfully.');
+    }
+
+    public function destroy(PoojaPacket $poojaPacket)
+    {
+        if ($poojaPacket->image && File::exists(public_path($poojaPacket->image))) {
+            File::delete(public_path($poojaPacket->image));
+        }
+
+        $poojaPacket->delete();
+
+        return back()->with('success', 'Pooja packet deleted successfully.');
+    }
+
+    private function validated(Request $request)
     {
         $data = $request->validate([
             'packet_name' => ['required', 'string', 'max:255'],
-            'image' => ['nullable', 'string', 'max:255'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'description' => ['nullable', 'string'],
-            'monthly_price' => ['required', 'numeric', 'min:0'],
-            'weekly_price' => ['nullable', 'numeric', 'min:0'],
-            'daily_quantity' => ['nullable', 'string', 'max:100'],
-            'package_type' => ['nullable', 'string', 'max:100'],
-            'duration_months' => ['required', 'integer', 'in:1,2,3,6,12'],
+
+            'package_type' => ['required', 'in:Monthly,Three Month,Six Month,One Year'],
+            'mrp_price' => ['required', 'numeric', 'min:0'],
+            'sale_price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:Active,Inactive'],
 
             'flower_ids' => ['required', 'array', 'min:1'],
             'flower_ids.*' => ['nullable', 'integer', 'exists:flower_products,id'],
+
             'flower_units' => ['nullable', 'array'],
             'flower_units.*' => ['nullable', 'string', 'max:50'],
+
             'quantities' => ['nullable', 'array'],
             'quantities.*' => ['nullable', 'numeric', 'min:0'],
-            'mrp_prices' => ['nullable', 'array'],
-            'mrp_prices.*' => ['nullable', 'numeric', 'min:0'],
-            'sale_prices' => ['nullable', 'array'],
-            'sale_prices.*' => ['nullable', 'numeric', 'min:0'],
+
+            'prices' => ['nullable', 'array'],
+            'prices.*' => ['nullable', 'numeric', 'min:0'],
+
+            'flower_mrp_prices' => ['nullable', 'array'],
+            'flower_mrp_prices.*' => ['nullable', 'numeric', 'min:0'],
+
+            'flower_sale_prices' => ['nullable', 'array'],
+            'flower_sale_prices.*' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        $durationMap = [
+            'Monthly' => 1,
+            'Three Month' => 3,
+            'Six Month' => 6,
+            'One Year' => 12,
+        ];
 
         $flowerIds = $request->input('flower_ids', []);
         $units = $request->input('flower_units', []);
         $quantities = $request->input('quantities', []);
-        $mrpPrices = $request->input('mrp_prices', []);
-        $salePrices = $request->input('sale_prices', []);
+        $prices = $request->input('prices', []);
+        $mrpPrices = $request->input('flower_mrp_prices', []);
+        $salePrices = $request->input('flower_sale_prices', []);
 
         $validFlowerIds = array_values(array_filter($flowerIds));
 
@@ -158,21 +200,25 @@ class PoojaPacketController extends Controller
             }
 
             $quantity = $quantities[$index] ?? null;
-            $salePrice = $salePrices[$index] ?? null;
+            $unit = $units[$index] ?? null;
+            $price = $prices[$index] ?? null;
+            $flowerMrp = $mrpPrices[$index] ?? null;
+            $flowerSale = $salePrices[$index] ?? null;
 
-            if ($quantity === null || $quantity === '' || $salePrice === null || $salePrice === '') {
+            if ($quantity === null || $quantity === '' || $unit === null || $unit === '' || $price === null || $price === '') {
                 throw ValidationException::withMessages([
-                    'flower_ids' => 'Quantity and sale price are required for every selected flower.',
+                    'flower_ids' => 'Flower unit, quantity and price are required for every selected flower.',
                 ]);
             }
 
             $includedFlowers[] = [
                 'flower_id' => (int) $flower->id,
                 'flower_name' => $flower->flower_name,
-                'unit' => $units[$index] ?? $flower->unit,
+                'unit' => $unit,
                 'quantity' => (float) $quantity,
-                'mrp_price' => (float) ($mrpPrices[$index] ?? 0),
-                'sale_price' => (float) $salePrice,
+                'price' => (float) $price,
+                'mrp_price' => (float) ($flowerMrp ?: $price),
+                'sale_price' => (float) ($flowerSale ?: $price),
             ];
         }
 
@@ -183,15 +229,47 @@ class PoojaPacketController extends Controller
         }
 
         $data['included_flowers'] = $includedFlowers;
+        $data['duration_months'] = $durationMap[$data['package_type']] ?? 1;
+
+        // Keep old monthly_price column safe for existing mobile app/API.
+        $data['monthly_price'] = $data['sale_price'];
+        $data['weekly_price'] = null;
+        $data['daily_quantity'] = null;
 
         unset(
+            $data['image'],
             $data['flower_ids'],
             $data['flower_units'],
             $data['quantities'],
-            $data['mrp_prices'],
-            $data['sale_prices']
+            $data['prices'],
+            $data['flower_mrp_prices'],
+            $data['flower_sale_prices']
         );
 
         return $data;
+    }
+
+    private function uploadImage(Request $request, PoojaPacket $packet = null)
+    {
+        if (!$request->hasFile('image')) {
+            return $packet ? $packet->image : null;
+        }
+
+        if ($packet && $packet->image && File::exists(public_path($packet->image))) {
+            File::delete(public_path($packet->image));
+        }
+
+        $folder = public_path('uploads/pooja-packets');
+
+        if (!File::exists($folder)) {
+            File::makeDirectory($folder, 0755, true);
+        }
+
+        $file = $request->file('image');
+        $fileName = time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
+
+        $file->move($folder, $fileName);
+
+        return 'uploads/pooja-packets/' . $fileName;
     }
 }
