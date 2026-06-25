@@ -1,365 +1,216 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title', 'Flower Admin')</title>
+@extends('admin.layout')
 
-    <script src="https://cdn.tailwindcss.com"></script>
+@section('title', 'Pooja Packets')
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    boxShadow: {
-                        soft: '0 15px 40px rgba(15, 23, 42, 0.08)',
-                    }
-                }
-            }
-        }
-    </script>
+@section('content')
+<div class="space-y-6">
 
-    <style>
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold text-orange-600 uppercase tracking-wide">Package Management</p>
+            <h1 class="text-3xl font-black text-slate-900">Pooja Packets</h1>
+            <p class="text-slate-500 mt-1">Manage package photo, flowers, quantity, MRP, sale price and package duration.</p>
+        </div>
 
-        ::-webkit-scrollbar-track {
-            background: #fff7ed;
-        }
+        <a href="{{ route('admin.pooja-packets.create') }}"
+           class="inline-flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-orange-200 transition">
+            + Add Package
+        </a>
+    </div>
 
-        ::-webkit-scrollbar-thumb {
-            background: #fb923c;
-            border-radius: 999px;
-        }
+    @if(session('success'))
+        <div class="bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-2xl font-semibold">
+            {{ session('success') }}
+        </div>
+    @endif
 
-        .sidebar-gradient {
-            background:
-                radial-gradient(circle at top left, rgba(251, 146, 60, 0.16), transparent 35%),
-                linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
-        }
+    <div class="grid md:grid-cols-3 gap-4">
+        <div class="bg-white border border-orange-100 rounded-2xl p-5 shadow-sm">
+            <p class="text-sm text-slate-500 font-semibold">Total Packages</p>
+            <h2 class="text-3xl font-black text-slate-900 mt-1">{{ $stats['total'] }}</h2>
+        </div>
 
-        .glass-header {
-            background: rgba(255, 255, 255, 0.82);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-        }
-    </style>
-</head>
+        <div class="bg-white border border-green-100 rounded-2xl p-5 shadow-sm">
+            <p class="text-sm text-slate-500 font-semibold">Active Packages</p>
+            <h2 class="text-3xl font-black text-green-600 mt-1">{{ $stats['active'] }}</h2>
+        </div>
 
-<body class="bg-[#fff7ed] text-slate-800 antialiased">
+        <div class="bg-white border border-red-100 rounded-2xl p-5 shadow-sm">
+            <p class="text-sm text-slate-500 font-semibold">Inactive Packages</p>
+            <h2 class="text-3xl font-black text-red-500 mt-1">{{ $stats['inactive'] }}</h2>
+        </div>
+    </div>
 
-@php
-    $pageTitle = trim($__env->yieldContent('title', 'Dashboard'));
+    <form method="GET" action="{{ route('admin.pooja-packets.index') }}"
+          class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div class="grid md:grid-cols-5 gap-4">
+            <div class="md:col-span-2">
+                <label class="block text-sm font-bold text-slate-700 mb-1">Search Package</label>
+                <input type="text"
+                       name="search"
+                       value="{{ $search ?? '' }}"
+                       placeholder="Search by package name or description"
+                       class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
+            </div>
 
-    $links = [
-        [
-            'label' => 'Dashboard',
-            'route' => 'admin.dashboard',
-            'active' => 'admin.dashboard',
-            'icon' => '🏠',
-            'desc' => 'Overview',
-        ],
-        [
-            'label' => 'Pooja Packets',
-            'route' => 'admin.pooja-packets.index',
-            'active' => 'admin.pooja-packets.*',
-            'icon' => '🪔',
-            'desc' => 'Packages',
-        ],
-        [
-            'label' => 'Flowers',
-            'route' => 'admin.flowers.index',
-            'active' => 'admin.flowers.*',
-            'icon' => '🌸',
-            'desc' => 'Products',
-        ],
-        [
-            'label' => 'Custom Orders',
-            'route' => 'admin.custom-orders.index',
-            'active' => 'admin.custom-orders.*',
-            'icon' => '🛒',
-            'desc' => 'Orders',
-        ],
-        [
-            'label' => 'Subscriptions',
-            'route' => 'admin.subscriptions.index',
-            'active' => 'admin.subscriptions.*',
-            'icon' => '📦',
-            'desc' => 'Plans',
-        ],
-        [
-            'label' => 'Daily Deliveries',
-            'route' => 'admin.daily-deliveries.index',
-            'active' => 'admin.daily-deliveries.*',
-            'icon' => '🚚',
-            'desc' => 'Delivery',
-        ],
-        [
-            'label' => 'Event Bookings',
-            'route' => 'admin.event-bookings.index',
-            'active' => 'admin.event-bookings.*',
-            'icon' => '🎉',
-            'desc' => 'Events',
-        ],
-        [
-            'label' => 'Quotations',
-            'route' => 'admin.quotations.index',
-            'active' => 'admin.quotations.*',
-            'icon' => '🧾',
-            'desc' => 'Quotes',
-        ],
-        [
-            'label' => 'Staff',
-            'route' => 'admin.staff.index',
-            'active' => 'admin.staff.*',
-            'icon' => '👥',
-            'desc' => 'Team',
-        ],
-        [
-            'label' => 'Payments',
-            'route' => 'admin.payments.index',
-            'active' => 'admin.payments.*',
-            'icon' => '💳',
-            'desc' => 'Money',
-        ],
-        [
-            'label' => 'Customers',
-            'route' => 'admin.customers.index',
-            'active' => 'admin.customers.*',
-            'icon' => '🙋',
-            'desc' => 'Users',
-        ],
-        [
-            'label' => 'Reports',
-            'route' => 'admin.reports.index',
-            'active' => 'admin.reports.*',
-            'icon' => '📊',
-            'desc' => 'Analytics',
-        ],
-        [
-            'label' => 'Settings',
-            'route' => 'admin.settings.index',
-            'active' => 'admin.settings.*',
-            'icon' => '⚙️',
-            'desc' => 'Config',
-        ],
-    ];
-@endphp
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">Package Type</label>
+                <select name="package_type"
+                        class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
+                    <option value="">All Types</option>
+                    <option value="Monthly" {{ ($packageType ?? '') == 'Monthly' ? 'selected' : '' }}>Monthly</option>
+                    <option value="Three Month" {{ ($packageType ?? '') == 'Three Month' ? 'selected' : '' }}>Three Month</option>
+                    <option value="Six Month" {{ ($packageType ?? '') == 'Six Month' ? 'selected' : '' }}>Six Month</option>
+                    <option value="One Year" {{ ($packageType ?? '') == 'One Year' ? 'selected' : '' }}>One Year</option>
+                </select>
+            </div>
 
-<div class="min-h-screen flex">
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">Status</label>
+                <select name="status"
+                        class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
+                    <option value="">All Status</option>
+                    <option value="Active" {{ ($status ?? '') == 'Active' ? 'selected' : '' }}>Active</option>
+                    <option value="Inactive" {{ ($status ?? '') == 'Inactive' ? 'selected' : '' }}>Inactive</option>
+                </select>
+            </div>
 
-    @auth
-        <div id="mobileSidebarOverlay"
-             class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
+            <div class="flex items-end gap-2">
+                <button class="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-3 rounded-xl font-bold transition">
+                    Filter
+                </button>
 
-        <aside id="sidebar"
-               class="sidebar-gradient fixed md:sticky top-0 left-0 z-50 w-80 h-screen border-r border-orange-100 shadow-soft transform -translate-x-full md:translate-x-0 transition-transform duration-300 overflow-y-auto">
+                <a href="{{ route('admin.pooja-packets.index') }}"
+                   class="px-4 py-3 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                    Reset
+                </a>
+            </div>
+        </div>
+    </form>
 
-            <div class="p-5">
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-orange-50 border-b border-orange-100">
+                    <tr>
+                        <th class="p-4 text-left text-slate-700">Package</th>
+                        <th class="p-4 text-left text-slate-700">Flowers</th>
+                        <th class="p-4 text-center text-slate-700">Type</th>
+                        <th class="p-4 text-center text-slate-700">MRP</th>
+                        <th class="p-4 text-center text-slate-700">Sale Price</th>
+                        <th class="p-4 text-center text-slate-700">Status</th>
+                        <th class="p-4 text-center text-slate-700">Action</th>
+                    </tr>
+                </thead>
 
-                <div class="flex items-center justify-between mb-6">
-                    <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3">
-                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 text-white flex items-center justify-center text-2xl shadow-lg shadow-orange-200">
-                            🌸
-                        </div>
-
-                        <div>
-                            <h1 class="text-xl font-black text-slate-900 leading-tight">Flower Admin</h1>
-                            <p class="text-xs font-bold text-orange-600">Fulawala Management</p>
-                        </div>
-                    </a>
-
-                    <button type="button"
-                            id="closeSidebar"
-                            class="md:hidden w-10 h-10 rounded-xl bg-white border border-orange-100 text-slate-700 font-black">
-                        ✕
-                    </button>
-                </div>
-
-                <div class="bg-gradient-to-br from-orange-500 to-red-500 rounded-3xl p-5 text-white shadow-lg shadow-orange-200 mb-6">
-                    <p class="text-sm text-orange-100 font-semibold">Welcome back</p>
-                    <h2 class="text-xl font-black mt-1">
-                        {{ auth()->user()->name ?? 'Admin' }}
-                    </h2>
-                    <p class="text-xs text-orange-100 mt-2">
-                        Manage flowers, packets, orders and subscriptions.
-                    </p>
-                </div>
-
-                <div class="mb-3 px-2">
-                    <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Main Menu</p>
-                </div>
-
-                <nav class="space-y-1.5">
-                    @foreach($links as $item)
+                <tbody>
+                    @forelse($packets as $packet)
                         @php
-                            $isActive = request()->routeIs($item['active']);
+                            $desc = $packet->description ?? '';
+                            $shortDesc = strlen($desc) > 45 ? substr($desc, 0, 45) . '...' : $desc;
                         @endphp
 
-                        <a href="{{ route($item['route']) }}"
-                           class="group flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200
-                           {{ $isActive
-                                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-200'
-                                : 'text-slate-600 hover:bg-white hover:text-orange-700 hover:shadow-sm'
-                           }}">
+                        <tr class="border-b border-slate-100 hover:bg-orange-50/40 transition">
+                            <td class="p-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center">
+                                        @if($packet->image)
+                                            <img src="{{ asset($packet->image) }}"
+                                                 alt="{{ $packet->packet_name }}"
+                                                 class="w-full h-full object-cover">
+                                        @else
+                                            <span class="text-orange-500 font-black text-xl">🌸</span>
+                                        @endif
+                                    </div>
 
-                            <span class="w-10 h-10 rounded-xl flex items-center justify-center text-lg
-                                {{ $isActive ? 'bg-white/20' : 'bg-orange-50 group-hover:bg-orange-100' }}">
-                                {{ $item['icon'] }}
-                            </span>
+                                    <div>
+                                        <div class="font-black text-slate-900">{{ $packet->packet_name }}</div>
+                                        <div class="text-xs text-slate-500 mt-1">
+                                            {{ $shortDesc }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
 
-                            <span class="flex-1">
-                                <span class="block text-sm font-black">{{ $item['label'] }}</span>
-                                <span class="block text-xs {{ $isActive ? 'text-orange-100' : 'text-slate-400' }}">
-                                    {{ $item['desc'] }}
+                            <td class="p-4">
+                                <div class="flex flex-wrap gap-1">
+                                    @foreach($packet->flower_items as $item)
+                                        <span class="inline-flex items-center bg-slate-100 text-slate-700 rounded-full px-3 py-1 text-xs font-semibold">
+                                            {{ $item['flower_name'] }}
+                                            @if(!empty($item['quantity']))
+                                                - {{ $item['quantity'] }} {{ $item['unit'] }}
+                                            @endif
+                                        </span>
+                                    @endforeach
+                                </div>
+                            </td>
+
+                            <td class="p-4 text-center">
+                                <span class="inline-flex px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-black">
+                                    {{ $packet->package_type_label }}
                                 </span>
-                            </span>
+                            </td>
 
-                            @if($isActive)
-                                <span class="text-white text-lg">›</span>
-                            @endif
-                        </a>
-                    @endforeach
-                </nav>
+                            <td class="p-4 text-center font-bold text-slate-700">
+                                ₹{{ number_format((float) $packet->mrp_price, 2) }}
+                            </td>
 
-                <form method="POST" action="{{ route('admin.logout') }}" class="mt-7">
-                    @csrf
+                            <td class="p-4 text-center font-black text-green-700">
+                                ₹{{ number_format((float) $packet->sale_price, 2) }}
+                            </td>
 
-                    <button type="submit"
-                            class="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl py-3 font-black shadow-lg shadow-slate-200 transition">
-                        <span>🚪</span>
-                        <span>Logout</span>
-                    </button>
-                </form>
+                            <td class="p-4 text-center">
+                                @if($packet->status === 'Active')
+                                    <span class="inline-flex px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-black">
+                                        Active
+                                    </span>
+                                @else
+                                    <span class="inline-flex px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-black">
+                                        Inactive
+                                    </span>
+                                @endif
+                            </td>
 
-                <div class="mt-6 p-4 rounded-2xl bg-white border border-orange-100">
-                    <p class="text-xs font-bold text-slate-400 uppercase">Support</p>
-                    <p class="text-sm font-bold text-slate-700 mt-1">Need help?</p>
-                    <p class="text-xs text-slate-500 mt-1">Check your admin settings or reports section.</p>
-                </div>
-            </div>
-        </aside>
-    @endauth
+                            <td class="p-4 text-center">
+                                <div class="flex justify-center items-center gap-2">
+                                    <a href="{{ route('admin.pooja-packets.edit', $packet) }}"
+                                       class="px-3 py-2 rounded-lg bg-orange-100 text-orange-700 font-black hover:bg-orange-200 transition">
+                                        Edit
+                                    </a>
 
-    <div class="flex-1 min-w-0">
+                                    <form method="POST"
+                                          action="{{ route('admin.pooja-packets.destroy', $packet) }}">
+                                        @csrf
+                                        @method('DELETE')
 
-        @auth
-            <header class="glass-header sticky top-0 z-30 border-b border-orange-100">
-                <div class="px-4 md:px-8 py-4">
-
-                    <div class="flex items-center justify-between gap-4">
-
-                        <div class="flex items-center gap-3 min-w-0">
-                            <button type="button"
-                                    id="openSidebar"
-                                    class="md:hidden w-11 h-11 rounded-2xl bg-white border border-orange-100 text-slate-800 font-black shadow-sm">
-                                ☰
-                            </button>
-
-                            <div class="min-w-0">
-                                <p class="text-xs font-black text-orange-600 uppercase tracking-wider">
-                                    Admin Panel
-                                </p>
-                                <h2 class="text-xl md:text-2xl font-black text-slate-900 truncate">
-                                    {{ $pageTitle }}
-                                </h2>
-                            </div>
-                        </div>
-
-                        <div class="hidden lg:flex items-center flex-1 max-w-xl mx-6">
-                            <div class="w-full relative">
-                                <span class="absolute left-4 top-3 text-slate-400">🔍</span>
-                                <input type="text"
-                                       placeholder="Search menu, orders, packets..."
-                                       class="w-full bg-white border border-orange-100 rounded-2xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none shadow-sm">
-                            </div>
-                        </div>
-
-                        <div class="flex items-center gap-3">
-
-                            <a href="{{ route('admin.pooja-packets.create') }}"
-                               class="hidden sm:inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-2xl font-black shadow-lg shadow-orange-200 transition">
-                                <span>+</span>
-                                <span>Add Packet</span>
-                            </a>
-
-                            <div class="hidden sm:flex items-center gap-3 bg-white border border-orange-100 rounded-2xl px-4 py-2 shadow-sm">
-                                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 text-white flex items-center justify-center font-black">
-                                    {{ strtoupper(substr(auth()->user()->name ?? 'A', 0, 1)) }}
+                                        <button type="submit"
+                                                onclick="return confirm('Delete this package?')"
+                                                class="px-3 py-2 rounded-lg bg-red-100 text-red-700 font-black hover:bg-red-200 transition">
+                                            Delete
+                                        </button>
+                                    </form>
                                 </div>
-
-                                <div>
-                                    <p class="text-sm font-black text-slate-800 leading-tight">
-                                        {{ auth()->user()->name ?? 'Admin' }}
-                                    </p>
-                                    <p class="text-xs text-slate-400 font-semibold">
-                                        Administrator
-                                    </p>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-            </header>
-        @endauth
-
-        <main class="{{ auth()->check() ? 'p-4 md:p-8' : 'p-4 md:p-8' }}">
-
-            @if(session('success'))
-                <div class="bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-2xl mb-5 font-bold shadow-sm">
-                    ✅ {{ session('success') }}
-                </div>
-            @endif
-
-            @if(session('error'))
-                <div class="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl mb-5 font-bold shadow-sm">
-                    ⚠️ {{ session('error') }}
-                </div>
-            @endif
-
-            @yield('content')
-
-        </main>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" class="p-10 text-center">
+                                <div class="text-slate-400 text-lg font-bold">No packages found.</div>
+                                <a href="{{ route('admin.pooja-packets.create') }}"
+                                   class="inline-flex mt-4 bg-orange-600 text-white px-5 py-3 rounded-xl font-bold">
+                                    Add First Package
+                                </a>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    <div>
+        {{ $packets->links() }}
+    </div>
+
 </div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const sidebar = document.getElementById('sidebar');
-        const openSidebar = document.getElementById('openSidebar');
-        const closeSidebar = document.getElementById('closeSidebar');
-        const overlay = document.getElementById('mobileSidebarOverlay');
-
-        function showSidebar() {
-            if (!sidebar || !overlay) return;
-            sidebar.classList.remove('-translate-x-full');
-            overlay.classList.remove('hidden');
-        }
-
-        function hideSidebar() {
-            if (!sidebar || !overlay) return;
-            sidebar.classList.add('-translate-x-full');
-            overlay.classList.add('hidden');
-        }
-
-        if (openSidebar) {
-            openSidebar.addEventListener('click', showSidebar);
-        }
-
-        if (closeSidebar) {
-            closeSidebar.addEventListener('click', hideSidebar);
-        }
-
-        if (overlay) {
-            overlay.addEventListener('click', hideSidebar);
-        }
-    });
-</script>
-
-@stack('scripts')
-
-</body>
-</html>
+@endsection
