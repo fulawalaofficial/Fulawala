@@ -1,334 +1,177 @@
 @extends('admin.layout')
 
-@section('title','Pooja Packets')
+@section('title', 'Pooja Packets')
 
 @section('content')
+<div class="space-y-6">
 
-<div class="space-y-8">
-
-    <!-- Header -->
-    <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-orange-600 via-orange-500 to-amber-400 p-8 shadow-xl">
-        <div class="absolute inset-0 opacity-20">
-            <div class="absolute -right-20 -top-20 h-60 w-60 rounded-full bg-white"></div>
-            <div class="absolute bottom-4 left-1/3 h-24 w-24 rounded-full border border-white"></div>
-            <div class="absolute -bottom-16 left-10 h-44 w-44 rounded-full bg-white"></div>
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold text-orange-600 uppercase tracking-wide">Subscription Management</p>
+            <h1 class="text-3xl font-black text-slate-900">Pooja Packets</h1>
+            <p class="text-slate-500 mt-1">Manage daily flower packets, pricing, duration and included flowers.</p>
         </div>
 
-        <div class="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-                <div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 text-sm font-bold text-white backdrop-blur">
-                    <span>🌸</span>
-                    <span>Pooja Packet Management</span>
-                </div>
-
-                <h1 class="text-3xl font-black text-white sm:text-4xl">
-                    Pooja Packets
-                </h1>
-
-                <p class="mt-3 max-w-2xl text-orange-50">
-                    Create, manage and organize daily, weekly and monthly pooja flower packets for your customers.
-                </p>
-            </div>
-
-            <a href="{{ route('admin.pooja-packets.create') }}"
-               class="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-orange-700 shadow-lg transition hover:-translate-y-1 hover:shadow-xl">
-                <span class="text-lg">＋</span>
-                <span>Add New Packet</span>
-            </a>
-        </div>
+        <a href="{{ route('admin.pooja-packets.create') }}"
+           class="inline-flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-orange-200 transition">
+            + Add Packet
+        </a>
     </div>
 
-    <!-- Success Message -->
     @if(session('success'))
-        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-700">
-            <div class="flex items-center gap-3">
-                <span class="text-xl">✅</span>
-                <p class="font-bold">{{ session('success') }}</p>
-            </div>
+        <div class="bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-2xl font-semibold">
+            {{ session('success') }}
         </div>
     @endif
 
-    <!-- Stats -->
-    <div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-bold text-gray-500">Total Packets</p>
-                    <p class="mt-2 text-3xl font-black text-orange-700">{{ $stats['total'] }}</p>
-                </div>
-                <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-2xl">
-                    📦
-                </div>
-            </div>
+    <div class="grid md:grid-cols-3 gap-4">
+        <div class="bg-white border border-orange-100 rounded-2xl p-5 shadow-sm">
+            <p class="text-sm text-slate-500 font-semibold">Total Packets</p>
+            <h2 class="text-3xl font-black text-slate-900 mt-1">{{ $stats['total'] }}</h2>
         </div>
 
-        <div class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-sm">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-bold text-gray-500">Active Packets</p>
-                    <p class="mt-2 text-3xl font-black text-emerald-700">{{ $stats['active'] }}</p>
-                </div>
-                <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl">
-                    ✅
-                </div>
-            </div>
+        <div class="bg-white border border-green-100 rounded-2xl p-5 shadow-sm">
+            <p class="text-sm text-slate-500 font-semibold">Active Packets</p>
+            <h2 class="text-3xl font-black text-green-600 mt-1">{{ $stats['active'] }}</h2>
         </div>
 
-        <div class="rounded-3xl border border-red-100 bg-gradient-to-br from-red-50 to-white p-6 shadow-sm">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-bold text-gray-500">Inactive Packets</p>
-                    <p class="mt-2 text-3xl font-black text-red-600">{{ $stats['inactive'] }}</p>
-                </div>
-                <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-2xl">
-                    ⏸️
-                </div>
-            </div>
-        </div>
-
-        <div class="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-bold text-gray-500">Average Price</p>
-                    <p class="mt-2 text-3xl font-black text-amber-700">
-                        ₹{{ number_format($stats['average_price'], 2) }}
-                    </p>
-                </div>
-                <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-2xl">
-                    💰
-                </div>
-            </div>
+        <div class="bg-white border border-red-100 rounded-2xl p-5 shadow-sm">
+            <p class="text-sm text-slate-500 font-semibold">Inactive Packets</p>
+            <h2 class="text-3xl font-black text-red-500 mt-1">{{ $stats['inactive'] }}</h2>
         </div>
     </div>
 
-    <!-- Filter Box -->
-    <div class="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
-        <form method="GET" action="{{ route('admin.pooja-packets.index') }}" class="grid gap-4 lg:grid-cols-12 lg:items-end">
-
-            <div class="lg:col-span-6">
-                <label class="mb-2 block text-sm font-black text-gray-700">
-                    Search Packet
-                </label>
-                <input
-                    type="text"
-                    name="search"
-                    value="{{ $search }}"
-                    placeholder="Search by packet name, flower, type..."
-                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100"
-                >
+    <form method="GET" action="{{ route('admin.pooja-packets.index') }}"
+          class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div class="grid md:grid-cols-4 gap-4">
+            <div class="md:col-span-2">
+                <label class="block text-sm font-bold text-slate-700 mb-1">Search Packet</label>
+                <input type="text"
+                       name="search"
+                       value="{{ $search ?? '' }}"
+                       placeholder="Search by packet name, type or description"
+                       class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
             </div>
 
-            <div class="lg:col-span-3">
-                <label class="mb-2 block text-sm font-black text-gray-700">
-                    Status
-                </label>
-                <select
-                    name="status"
-                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100"
-                >
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">Status</label>
+                <select name="status"
+                        class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                     <option value="">All Status</option>
-                    <option value="Active" {{ $status === 'Active' ? 'selected' : '' }}>Active</option>
-                    <option value="Inactive" {{ $status === 'Inactive' ? 'selected' : '' }}>Inactive</option>
+                    <option value="Active" @selected(($status ?? '') === 'Active')>Active</option>
+                    <option value="Inactive" @selected(($status ?? '') === 'Inactive')>Inactive</option>
                 </select>
             </div>
 
-            <div class="flex gap-3 lg:col-span-3">
-                <button
-                    type="submit"
-                    class="flex-1 rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-100 transition hover:bg-orange-700">
+            <div class="flex items-end gap-2">
+                <button class="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-3 rounded-xl font-bold transition">
                     Filter
                 </button>
 
                 <a href="{{ route('admin.pooja-packets.index') }}"
-                   class="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-3 text-sm font-black text-gray-600 transition hover:bg-gray-100">
-                    Clear
+                   class="px-4 py-3 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                    Reset
                 </a>
             </div>
-
-        </form>
-    </div>
-
-    <!-- Packets Table -->
-    <div class="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-sm">
-
-        <div class="flex flex-col gap-3 border-b border-gray-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h2 class="text-xl font-black text-gray-900">
-                    Packet List
-                </h2>
-                <p class="text-sm text-gray-500">
-                    Showing {{ $packets->count() }} packets on this page.
-                </p>
-            </div>
-
-            <div class="rounded-full bg-orange-50 px-4 py-2 text-sm font-bold text-orange-700">
-                Total Result: {{ $packets->total() }}
-            </div>
         </div>
+    </form>
 
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div class="overflow-x-auto">
-            <table class="w-full min-w-[950px] text-sm">
-                <thead>
-                    <tr class="bg-orange-50 text-left text-xs uppercase tracking-wide text-gray-500">
-                        <th class="px-6 py-4">Packet</th>
-                        <th class="px-6 py-4">Included Flowers</th>
-                        <th class="px-6 py-4 text-center">Monthly Price</th>
-                        <th class="px-6 py-4 text-center">Weekly Price</th>
-                        <th class="px-6 py-4 text-center">Type</th>
-                        <th class="px-6 py-4 text-center">Status</th>
-                        <th class="px-6 py-4 text-center">Action</th>
+            <table class="w-full text-sm">
+                <thead class="bg-orange-50 border-b border-orange-100">
+                    <tr>
+                        <th class="p-4 text-left text-slate-700">Packet</th>
+                        <th class="p-4 text-left text-slate-700">Included Flowers</th>
+                        <th class="p-4 text-center text-slate-700">Duration</th>
+                        <th class="p-4 text-center text-slate-700">MRP Total</th>
+                        <th class="p-4 text-center text-slate-700">Sale Total</th>
+                        <th class="p-4 text-center text-slate-700">Monthly Price</th>
+                        <th class="p-4 text-center text-slate-700">Status</th>
+                        <th class="p-4 text-center text-slate-700">Action</th>
                     </tr>
                 </thead>
 
-                <tbody class="divide-y divide-gray-100">
+                <tbody>
                     @forelse($packets as $packet)
-                        @php
-                            $flowers = $packet->included_flowers;
-
-                            if (is_string($flowers)) {
-                                $decodedFlowers = json_decode($flowers, true);
-                                $flowers = json_last_error() === JSON_ERROR_NONE ? $decodedFlowers : explode(',', $flowers);
-                            }
-
-                            $flowers = array_values(array_filter((array) $flowers));
-                        @endphp
-
-                        <tr class="transition hover:bg-orange-50/50">
-
-                            <!-- Packet Info -->
-                            <td class="px-6 py-5">
-                                <div class="flex items-center gap-4">
-                                    <div class="h-14 w-14 overflow-hidden rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center text-2xl shadow-sm">
-                                        @if(!empty($packet->image))
-                                            <img
-                                                src="{{ filter_var($packet->image, FILTER_VALIDATE_URL) ? $packet->image : asset($packet->image) }}"
-                                                alt="{{ $packet->packet_name }}"
-                                                class="h-full w-full object-cover"
-                                            >
-                                        @else
-                                            🌼
-                                        @endif
-                                    </div>
-
-                                    <div>
-                                        <p class="font-black text-gray-900">
-                                            {{ $packet->packet_name }}
-                                        </p>
-
-                                        <p class="mt-1 max-w-xs truncate text-xs text-gray-500">
-                                            {{ $packet->description ?: 'No description added' }}
-                                        </p>
-
-                                        @if(!empty($packet->daily_quantity))
-                                            <p class="mt-1 text-xs font-bold text-orange-700">
-                                                Qty: {{ $packet->daily_quantity }}
-                                            </p>
-                                        @endif
-                                    </div>
+                        <tr class="border-b border-slate-100 hover:bg-orange-50/40 transition">
+                            <td class="p-4">
+                                <div class="font-black text-slate-900">{{ $packet->packet_name }}</div>
+                                <div class="text-xs text-slate-500 mt-1">
+                                    {{ $packet->package_type ?: 'General Packet' }}
                                 </div>
                             </td>
 
-                            <!-- Flowers -->
-                            <td class="px-6 py-5">
-                                <div class="flex max-w-sm flex-wrap gap-2">
-                                    @forelse($flowers as $flower)
-                                        <span class="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
-                                            {{ $flower }}
-                                        </span>
-                                    @empty
-                                        <span class="text-xs font-semibold text-gray-400">
-                                            No flowers added
-                                        </span>
-                                    @endforelse
+                            <td class="p-4">
+                                <div class="space-y-1">
+                                    @foreach($packet->flower_items as $item)
+                                        <div class="inline-flex items-center bg-slate-100 text-slate-700 rounded-full px-3 py-1 mr-1 mb-1 text-xs font-semibold">
+                                            {{ $item['flower_name'] }}
+                                            @if(!empty($item['quantity']))
+                                                - {{ $item['quantity'] }} {{ $item['unit'] }}
+                                            @endif
+                                        </div>
+                                    @endforeach
                                 </div>
                             </td>
 
-                            <!-- Monthly Price -->
-                            <td class="px-6 py-5 text-center">
-                                <span class="font-black text-gray-900">
-                                    ₹{{ number_format($packet->monthly_price, 2) }}
-                                </span>
+                            <td class="p-4 text-center font-bold text-slate-700">
+                                {{ $packet->duration_label }}
                             </td>
 
-                            <!-- Weekly Price -->
-                            <td class="px-6 py-5 text-center">
-                                @if($packet->weekly_price)
-                                    <span class="font-black text-gray-900">
-                                        ₹{{ number_format($packet->weekly_price, 2) }}
-                                    </span>
-                                @else
-                                    <span class="text-xs font-semibold text-gray-400">Not set</span>
-                                @endif
+                            <td class="p-4 text-center font-bold text-slate-700">
+                                ₹{{ number_format($packet->items_total_mrp, 2) }}
                             </td>
 
-                            <!-- Package Type -->
-                            <td class="px-6 py-5 text-center">
-                                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
-                                    {{ $packet->package_type ?: 'General' }}
-                                </span>
+                            <td class="p-4 text-center font-bold text-green-700">
+                                ₹{{ number_format($packet->items_total_sale, 2) }}
                             </td>
 
-                            <!-- Status -->
-                            <td class="px-6 py-5 text-center">
+                            <td class="p-4 text-center font-black text-orange-700">
+                                ₹{{ number_format((float) $packet->monthly_price, 2) }}
+                            </td>
+
+                            <td class="p-4 text-center">
                                 @if($packet->status === 'Active')
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                                        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                                    <span class="inline-flex px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-black">
                                         Active
                                     </span>
                                 @else
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-600">
-                                        <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                                    <span class="inline-flex px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-black">
                                         Inactive
                                     </span>
                                 @endif
                             </td>
 
-                            <!-- Action -->
-                            <td class="px-6 py-5 text-center">
-                                <div class="flex items-center justify-center gap-2">
+                            <td class="p-4 text-center">
+                                <div class="flex justify-center items-center gap-2">
                                     <a href="{{ route('admin.pooja-packets.edit', $packet) }}"
-                                       class="rounded-xl bg-orange-50 px-4 py-2 text-xs font-black text-orange-700 transition hover:bg-orange-100">
+                                       class="px-3 py-2 rounded-lg bg-orange-100 text-orange-700 font-black hover:bg-orange-200 transition">
                                         Edit
                                     </a>
 
                                     <form method="POST"
-                                          action="{{ route('admin.pooja-packets.destroy', $packet) }}"
-                                          class="inline">
+                                          action="{{ route('admin.pooja-packets.destroy', $packet) }}">
                                         @csrf
                                         @method('DELETE')
 
-                                        <button
-                                            type="submit"
-                                            onclick="return confirm('Are you sure you want to delete this pooja packet?')"
-                                            class="rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600 transition hover:bg-red-100">
+                                        <button type="submit"
+                                                onclick="return confirm('Delete this pooja packet?')"
+                                                class="px-3 py-2 rounded-lg bg-red-100 text-red-700 font-black hover:bg-red-200 transition">
                                             Delete
                                         </button>
                                     </form>
                                 </div>
                             </td>
-
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-6 py-16 text-center">
-                                <div class="mx-auto max-w-md">
-                                    <div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-orange-50 text-4xl">
-                                        🌸
-                                    </div>
-
-                                    <h3 class="text-xl font-black text-gray-900">
-                                        No pooja packets found
-                                    </h3>
-
-                                    <p class="mt-2 text-sm text-gray-500">
-                                        Create your first pooja packet or change your search filters.
-                                    </p>
-
-                                    <a href="{{ route('admin.pooja-packets.create') }}"
-                                       class="mt-5 inline-flex rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-100 transition hover:bg-orange-700">
-                                        Add Packet
-                                    </a>
-                                </div>
+                            <td colspan="8" class="p-10 text-center">
+                                <div class="text-slate-400 text-lg font-bold">No pooja packets found.</div>
+                                <a href="{{ route('admin.pooja-packets.create') }}"
+                                   class="inline-flex mt-4 bg-orange-600 text-white px-5 py-3 rounded-xl font-bold">
+                                    Add First Packet
+                                </a>
                             </td>
                         </tr>
                     @endforelse
@@ -337,11 +180,9 @@
         </div>
     </div>
 
-    <!-- Pagination -->
     <div>
         {{ $packets->links() }}
     </div>
 
 </div>
-
 @endsection
