@@ -16,12 +16,16 @@ use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\SubscriptionDeliveryController;
 use Illuminate\Support\Facades\Route;
 
+
 Route::redirect('/', '/admin/dashboard');
 
 Route::get('/admin/login', [AuthController::class, 'showLogin'])->name('admin.login');
 Route::post('/admin/login', [AuthController::class, 'login'])->name('admin.login.submit');
 
 Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
+    Route::get('/subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+Route::get('/subscriptions/create', [SubscriptionController::class, 'create'])->name('subscriptions.create');
+Route::post('/subscriptions', [SubscriptionController::class, 'store'])->name('subscriptions.store');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
