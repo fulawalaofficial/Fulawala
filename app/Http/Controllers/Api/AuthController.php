@@ -47,6 +47,7 @@ class AuthController extends Controller
             'token' => $user->createToken('mobile')->plainTextToken,
         ], 201);
     }
+    
     public function login(Request $request)
     {
         $request->validate([
@@ -75,4 +76,5 @@ class AuthController extends Controller
         $request->user()?->currentAccessToken()?->delete();
         return response()->json(['message' => 'Logged out']);
     }
+
 }
