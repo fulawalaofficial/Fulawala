@@ -1,16 +1,546 @@
 @extends('admin.layout')
-@section('title','Quotations')
+
+@section('title', 'Quotations')
+
 @section('content')
-<h1 class="text-3xl font-black mb-6">Quotation Management</h1>
-<form method="POST" action="{{ route('admin.quotations.store') }}" class="bg-white border rounded-2xl p-5 grid md:grid-cols-2 gap-4 mb-6">@csrf
-    <select name="booking_id" class="border rounded-lg px-4 py-3"><option value="">Select booking</option>@foreach($bookings as $b)<option value="{{ $b->id }}">#{{ $b->id }} - {{ $b->event_type }} - {{ $b->user->name ?? '' }}</option>@endforeach</select>
-    <input name="total_amount" placeholder="Total amount" class="border rounded-lg px-4 py-3">
-    <input name="advance_amount" placeholder="Advance amount" class="border rounded-lg px-4 py-3">
-    <input name="terms" placeholder="Terms" class="border rounded-lg px-4 py-3">
-    <textarea name="decoration_details" placeholder="Decoration details" class="border rounded-lg px-4 py-3 md:col-span-2"></textarea>
-    <button class="bg-orange-600 text-white rounded-lg py-3 font-bold md:col-span-2">Send Quotation</button>
-</form>
-<div class="bg-white border rounded-2xl overflow-hidden"><table class="w-full text-sm"><thead class="bg-orange-100"><tr><th class="p-3">ID</th><th class="p-3 text-left">Customer</th><th class="p-3">Total</th><th class="p-3">Advance</th><th class="p-3">Balance</th><th class="p-3">Status</th></tr></thead><tbody>
-@foreach($quotations as $q)<tr class="border-t"><td class="p-3 text-center">#{{ $q->id }}</td><td class="p-3">{{ $q->booking->user->name ?? '-' }}</td><td class="p-3 text-center">₹{{ $q->total_amount }}</td><td class="p-3 text-center">₹{{ $q->advance_amount }}</td><td class="p-3 text-center">₹{{ $q->balance_amount }}</td><td class="p-3 text-center">{{ $q->quotation_status }}</td></tr>@endforeach
-</tbody></table></div><div class="mt-4">{{ $quotations->links() }}</div>
+<div class="space-y-6">
+
+    {{-- Header --}}
+    <div class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-orange-600 via-amber-500 to-yellow-400 p-6 md:p-8 text-white shadow-xl">
+        <div class="absolute -right-20 -top-20 h-60 w-60 rounded-full bg-white/20 blur-3xl"></div>
+        <div class="absolute -bottom-24 left-10 h-64 w-64 rounded-full bg-red-500/20 blur-3xl"></div>
+
+        <div class="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+                <div class="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 text-sm font-black backdrop-blur">
+                    🧾 Fulawala Quotation Desk
+                </div>
+
+                <h1 class="mt-4 text-3xl md:text-4xl font-black tracking-tight">
+                    Quotation Management
+                </h1>
+
+                <p class="mt-2 max-w-2xl text-white/90">
+                    Create event decoration quotations, manage advance payments, balance amount, terms and quotation status from one premium dashboard.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-center">
+                <div class="rounded-2xl bg-white/20 px-5 py-4 backdrop-blur">
+                    <p class="text-2xl font-black">{{ $stats['total'] ?? 0 }}</p>
+                    <p class="text-xs font-bold uppercase text-white/80">Total Quotes</p>
+                </div>
+
+                <div class="rounded-2xl bg-white/20 px-5 py-4 backdrop-blur">
+                    <p class="text-2xl font-black">₹{{ number_format((float) ($stats['total_amount'] ?? 0), 2) }}</p>
+                    <p class="text-xs font-bold uppercase text-white/80">Quote Value</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Flash / Validation --}}
+    @if(session('success'))
+        <div class="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 font-semibold text-green-800 shadow-sm">
+            ✅ {{ session('success') }}
+        </div>
+    @endif
+
+    @if(session('error'))
+        <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 font-semibold text-red-800 shadow-sm">
+            ⚠️ {{ session('error') }}
+        </div>
+    @endif
+
+    @if($errors->any())
+        <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-800 shadow-sm">
+            <p class="font-black">Please fix these errors:</p>
+            <ul class="mt-2 list-disc pl-5 text-sm font-semibold">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    {{-- Stats --}}
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div class="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-black text-gray-500">Total Quotations</p>
+                    <h3 class="mt-2 text-3xl font-black text-gray-900">{{ $stats['total'] ?? 0 }}</h3>
+                </div>
+                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-2xl">🧾</div>
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-green-100 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-black text-gray-500">Accepted</p>
+                    <h3 class="mt-2 text-3xl font-black text-gray-900">{{ $stats['accepted'] ?? 0 }}</h3>
+                </div>
+                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-green-100 text-2xl">✅</div>
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-blue-100 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-black text-gray-500">Advance</p>
+                    <h3 class="mt-2 text-2xl font-black text-gray-900">
+                        ₹{{ number_format((float) ($stats['advance_amount'] ?? 0), 2) }}
+                    </h3>
+                </div>
+                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-blue-100 text-2xl">💳</div>
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-red-100 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-black text-gray-500">Balance</p>
+                    <h3 class="mt-2 text-2xl font-black text-gray-900">
+                        ₹{{ number_format((float) ($stats['balance_amount'] ?? 0), 2) }}
+                    </h3>
+                </div>
+                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-red-100 text-2xl">💰</div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Create Quotation --}}
+    <div class="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+        <div class="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+                <h2 class="text-2xl font-black text-gray-900">Create New Quotation</h2>
+                <p class="text-sm font-semibold text-gray-500">Select an event booking and send price quotation to the customer.</p>
+            </div>
+
+            <div class="rounded-full bg-orange-50 px-4 py-2 text-sm font-black text-orange-700">
+                Available bookings: {{ $bookings->count() }}
+            </div>
+        </div>
+
+        <form method="POST" action="{{ route('admin.quotations.store') }}" class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            @csrf
+
+            <div class="md:col-span-2">
+                <label class="mb-2 block text-sm font-black text-gray-700">Select Booking</label>
+                <select
+                    name="booking_id"
+                    required
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >
+                    <option value="">Select booking</option>
+                    @foreach($bookings as $b)
+                        <option value="{{ $b->id }}" @selected(old('booking_id') == $b->id)>
+                            #{{ $b->id }} - {{ $b->event_type }} - {{ $b->user->name ?? 'Customer' }} - ₹{{ number_format((float) $b->budget, 2) }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label class="mb-2 block text-sm font-black text-gray-700">Total Amount</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    name="total_amount"
+                    value="{{ old('total_amount') }}"
+                    placeholder="Example: 25000"
+                    required
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >
+            </div>
+
+            <div>
+                <label class="mb-2 block text-sm font-black text-gray-700">Advance Amount</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    name="advance_amount"
+                    value="{{ old('advance_amount') }}"
+                    placeholder="Example: 5000"
+                    required
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >
+            </div>
+
+            <div class="md:col-span-2">
+                <label class="mb-2 block text-sm font-black text-gray-700">Decoration Details</label>
+                <textarea
+                    name="decoration_details"
+                    rows="4"
+                    placeholder="Write flower decoration details, stage setup, mandap, gate decoration, lighting etc..."
+                    required
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >{{ old('decoration_details') }}</textarea>
+            </div>
+
+            <div class="md:col-span-2">
+                <label class="mb-2 block text-sm font-black text-gray-700">Terms & Conditions</label>
+                <textarea
+                    name="terms"
+                    rows="3"
+                    placeholder="Example: Advance is non-refundable. Final payment before event completion..."
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >{{ old('terms') }}</textarea>
+            </div>
+
+            <div class="md:col-span-2">
+                <button
+                    type="submit"
+                    class="w-full rounded-2xl bg-gradient-to-r from-orange-600 to-amber-500 px-8 py-4 text-sm font-black text-white shadow-lg shadow-orange-200 transition hover:scale-[1.01]"
+                >
+                    Send Quotation
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {{-- Filters --}}
+    <div class="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+        <form method="GET" action="{{ route('admin.quotations.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-5">
+            <div class="md:col-span-2">
+                <label class="mb-2 block text-sm font-black text-gray-700">Search</label>
+                <input
+                    type="text"
+                    name="search"
+                    value="{{ $filters['search'] ?? '' }}"
+                    placeholder="Quote ID, customer, event, terms..."
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >
+            </div>
+
+            <div>
+                <label class="mb-2 block text-sm font-black text-gray-700">Status</label>
+                <select
+                    name="status"
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >
+                    <option value="">All Status</option>
+                    @foreach($statusOptions as $item)
+                        <option value="{{ $item }}" @selected(($filters['status'] ?? '') == $item)>
+                            {{ $item }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label class="mb-2 block text-sm font-black text-gray-700">From Date</label>
+                <input
+                    type="date"
+                    name="date_from"
+                    value="{{ $filters['date_from'] ?? '' }}"
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >
+            </div>
+
+            <div>
+                <label class="mb-2 block text-sm font-black text-gray-700">To Date</label>
+                <input
+                    type="date"
+                    name="date_to"
+                    value="{{ $filters['date_to'] ?? '' }}"
+                    class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >
+            </div>
+
+            <div class="md:col-span-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <a
+                    href="{{ route('admin.quotations.index') }}"
+                    class="rounded-2xl border border-gray-200 bg-white px-6 py-3 text-center text-sm font-black text-gray-700 transition hover:bg-gray-50"
+                >
+                    Reset
+                </a>
+
+                <button
+                    type="submit"
+                    class="rounded-2xl bg-gray-900 px-8 py-3 text-sm font-black text-white shadow-lg transition hover:bg-orange-600"
+                >
+                    Apply Filter
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {{-- Quotation Cards --}}
+    <div class="space-y-4">
+        @forelse($quotations as $q)
+            @php
+                $booking = $q->booking;
+                $customer = $booking->user ?? null;
+                $statusText = $q->quotation_status ?: 'Sent';
+
+                $statusClass = match(strtolower((string) $statusText)) {
+                    'accepted', 'paid' => 'bg-green-100 text-green-700 border-green-200',
+                    'rejected', 'cancelled' => 'bg-red-100 text-red-700 border-red-200',
+                    default => 'bg-blue-100 text-blue-700 border-blue-200',
+                };
+
+                $eventDate = $booking && $booking->event_date
+                    ? \Illuminate\Support\Carbon::parse($booking->event_date)->format('d M Y')
+                    : '-';
+
+                $eventTime = $booking && $booking->event_time
+                    ? $booking->event_time
+                    : '-';
+            @endphp
+
+            <details class="group overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-sm transition hover:shadow-xl hover:shadow-orange-100">
+                <summary class="cursor-pointer list-none p-5 md:p-6">
+                    <div class="grid grid-cols-1 gap-5 md:grid-cols-12 md:items-center">
+
+                        <div class="md:col-span-2">
+                            <p class="text-xs font-black uppercase tracking-wide text-gray-400">Quotation</p>
+                            <div class="mt-1 flex items-center gap-3">
+                                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 text-lg font-black text-white">
+                                    #{{ $q->id }}
+                                </div>
+                                <div>
+                                    <p class="font-black text-gray-900">Quote #{{ $q->id }}</p>
+                                    <p class="text-xs font-semibold text-gray-500">
+                                        {{ $q->created_at ? $q->created_at->format('d M Y, h:i A') : '-' }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <p class="text-xs font-black uppercase tracking-wide text-gray-400">Customer</p>
+                            <p class="mt-1 font-black text-gray-900">{{ $customer->name ?? '-' }}</p>
+                            <p class="text-xs text-gray-500">{{ $customer->mobile ?? $customer->email ?? '-' }}</p>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <p class="text-xs font-black uppercase tracking-wide text-gray-400">Event</p>
+                            <p class="mt-1 font-black text-gray-900">{{ $booking->event_type ?? '-' }}</p>
+                            <p class="text-xs text-gray-500">{{ $eventDate }} · {{ $eventTime }}</p>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <p class="text-xs font-black uppercase tracking-wide text-gray-400">Total</p>
+                            <p class="mt-1 text-lg font-black text-gray-900">
+                                ₹{{ number_format((float) $q->total_amount, 2) }}
+                            </p>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="rounded-2xl bg-green-50 px-3 py-2">
+                                    <p class="text-[11px] font-black uppercase text-green-700">Advance</p>
+                                    <p class="font-black text-green-800">₹{{ number_format((float) $q->advance_amount, 2) }}</p>
+                                </div>
+                                <div class="rounded-2xl bg-red-50 px-3 py-2">
+                                    <p class="text-[11px] font-black uppercase text-red-700">Balance</p>
+                                    <p class="font-black text-red-800">₹{{ number_format((float) $q->balance_amount, 2) }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-1">
+                            <span class="inline-flex rounded-full border px-3 py-1 text-xs font-black {{ $statusClass }}">
+                                {{ $statusText }}
+                            </span>
+                        </div>
+
+                        <div class="md:col-span-1 text-right">
+                            <span class="inline-flex rounded-2xl bg-gray-100 px-4 py-2 text-xs font-black text-gray-700 transition group-open:bg-orange-100 group-open:text-orange-700">
+                                View
+                            </span>
+                        </div>
+                    </div>
+                </summary>
+
+                <div class="border-t border-orange-100 bg-gradient-to-br from-orange-50/80 to-white p-5 md:p-6">
+                    <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+
+                        {{-- Details --}}
+                        <div class="lg:col-span-2 space-y-5">
+                            <div class="rounded-3xl border border-orange-100 bg-white p-5">
+                                <h3 class="mb-5 text-lg font-black text-gray-900">Quotation Details</h3>
+
+                                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                    <div class="rounded-2xl bg-orange-50 p-4">
+                                        <p class="text-xs font-black uppercase text-orange-600">Total Amount</p>
+                                        <p class="mt-1 text-xl font-black text-gray-900">₹{{ number_format((float) $q->total_amount, 2) }}</p>
+                                    </div>
+
+                                    <div class="rounded-2xl bg-green-50 p-4">
+                                        <p class="text-xs font-black uppercase text-green-600">Advance Amount</p>
+                                        <p class="mt-1 text-xl font-black text-gray-900">₹{{ number_format((float) $q->advance_amount, 2) }}</p>
+                                    </div>
+
+                                    <div class="rounded-2xl bg-red-50 p-4">
+                                        <p class="text-xs font-black uppercase text-red-600">Balance Amount</p>
+                                        <p class="mt-1 text-xl font-black text-gray-900">₹{{ number_format((float) $q->balance_amount, 2) }}</p>
+                                    </div>
+
+                                    <div class="md:col-span-3 rounded-2xl bg-gray-50 p-4">
+                                        <p class="text-xs font-black uppercase text-gray-500">Decoration Details</p>
+                                        <p class="mt-1 whitespace-pre-line font-semibold leading-6 text-gray-900">{{ $q->decoration_details ?: '-' }}</p>
+                                    </div>
+
+                                    <div class="md:col-span-3 rounded-2xl bg-gray-50 p-4">
+                                        <p class="text-xs font-black uppercase text-gray-500">Terms & Conditions</p>
+                                        <p class="mt-1 whitespace-pre-line font-semibold leading-6 text-gray-900">{{ $q->terms ?: 'No terms added.' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-3xl border border-orange-100 bg-white p-5">
+                                <h3 class="mb-5 text-lg font-black text-gray-900">Booking Information</h3>
+
+                                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div class="rounded-2xl bg-gray-50 p-4">
+                                        <p class="text-xs font-black uppercase text-gray-500">Booking ID</p>
+                                        <p class="mt-1 font-black text-gray-900">#{{ $booking->id ?? '-' }}</p>
+                                    </div>
+
+                                    <div class="rounded-2xl bg-gray-50 p-4">
+                                        <p class="text-xs font-black uppercase text-gray-500">Event Type</p>
+                                        <p class="mt-1 font-black text-gray-900">{{ $booking->event_type ?? '-' }}</p>
+                                    </div>
+
+                                    <div class="rounded-2xl bg-gray-50 p-4">
+                                        <p class="text-xs font-black uppercase text-gray-500">Event Date</p>
+                                        <p class="mt-1 font-black text-gray-900">{{ $eventDate }} · {{ $eventTime }}</p>
+                                    </div>
+
+                                    <div class="rounded-2xl bg-gray-50 p-4">
+                                        <p class="text-xs font-black uppercase text-gray-500">Customer Budget</p>
+                                        <p class="mt-1 font-black text-gray-900">₹{{ number_format((float) ($booking->budget ?? 0), 2) }}</p>
+                                    </div>
+
+                                    <div class="md:col-span-2 rounded-2xl bg-gray-50 p-4">
+                                        <p class="text-xs font-black uppercase text-gray-500">Venue</p>
+                                        <p class="mt-1 font-semibold leading-6 text-gray-900">{{ $booking->venue_address ?? '-' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Edit Form --}}
+                        <div class="space-y-5">
+                            <div class="rounded-3xl border border-orange-100 bg-white p-5">
+                                <h3 class="mb-4 text-lg font-black text-gray-900">Customer Details</h3>
+
+                                <div class="space-y-3 text-sm">
+                                    <div>
+                                        <p class="font-black text-gray-500">Name</p>
+                                        <p class="font-semibold text-gray-900">{{ $customer->name ?? '-' }}</p>
+                                    </div>
+
+                                    <div>
+                                        <p class="font-black text-gray-500">Email</p>
+                                        <p class="font-semibold text-gray-900">{{ $customer->email ?? '-' }}</p>
+                                    </div>
+
+                                    <div>
+                                        <p class="font-black text-gray-500">Mobile</p>
+                                        <p class="font-semibold text-gray-900">{{ $customer->mobile ?? '-' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-3xl border border-orange-100 bg-white p-5">
+                                <h3 class="mb-4 text-lg font-black text-gray-900">Edit Quotation</h3>
+
+                                <form method="POST" action="{{ route('admin.quotations.update', $q) }}" class="space-y-4">
+                                    @csrf
+                                    @method('PATCH')
+
+                                    <div>
+                                        <label class="mb-2 block text-sm font-black text-gray-700">Total Amount</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            name="total_amount"
+                                            value="{{ old('total_amount', $q->total_amount) }}"
+                                            required
+                                            class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                                        >
+                                    </div>
+
+                                    <div>
+                                        <label class="mb-2 block text-sm font-black text-gray-700">Advance Amount</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            name="advance_amount"
+                                            value="{{ old('advance_amount', $q->advance_amount) }}"
+                                            required
+                                            class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                                        >
+                                    </div>
+
+                                    <div>
+                                        <label class="mb-2 block text-sm font-black text-gray-700">Status</label>
+                                        <select
+                                            name="quotation_status"
+                                            required
+                                            class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                                        >
+                                            @foreach($statusOptions as $item)
+                                                <option value="{{ $item }}" @selected($q->quotation_status == $item)>
+                                                    {{ $item }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="mb-2 block text-sm font-black text-gray-700">Decoration Details</label>
+                                        <textarea
+                                            name="decoration_details"
+                                            rows="4"
+                                            required
+                                            class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                                        >{{ old('decoration_details', $q->decoration_details) }}</textarea>
+                                    </div>
+
+                                    <div>
+                                        <label class="mb-2 block text-sm font-black text-gray-700">Terms</label>
+                                        <textarea
+                                            name="terms"
+                                            rows="3"
+                                            class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                                        >{{ old('terms', $q->terms) }}</textarea>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        class="w-full rounded-2xl bg-gray-900 px-5 py-3 text-sm font-black text-white shadow-lg transition hover:bg-orange-600"
+                                    >
+                                        Update Quotation
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        @empty
+            <div class="rounded-[2rem] border border-dashed border-orange-200 bg-white p-12 text-center">
+                <div class="mx-auto grid h-20 w-20 place-items-center rounded-full bg-orange-100 text-4xl">
+                    🧾
+                </div>
+                <h3 class="mt-5 text-2xl font-black text-gray-900">No quotations found</h3>
+                <p class="mt-2 text-gray-500">Create your first quotation from the form above.</p>
+            </div>
+        @endforelse
+    </div>
+
+    {{-- Pagination --}}
+    <div class="rounded-3xl border border-orange-100 bg-white p-4 shadow-sm">
+        {{ $quotations->links() }}
+    </div>
+</div>
 @endsection

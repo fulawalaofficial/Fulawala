@@ -107,6 +107,16 @@ Route::patch('/event-bookings/{eventBooking}/status', [EventBookingController::c
     Route::post('/quotations', [QuotationController::class, 'store'])
         ->name('quotations.store');
 
+        /*bhabani*/
+        Route::get('/quotations', [QuotationController::class, 'index'])
+    ->name('quotations.index');
+
+Route::post('/quotations', [QuotationController::class, 'store'])
+    ->name('quotations.store');
+
+Route::patch('/quotations/{quotation}', [QuotationController::class, 'update'])
+    ->name('quotations.update');
+
     /*
     |--------------------------------------------------------------------------
     | Staff
