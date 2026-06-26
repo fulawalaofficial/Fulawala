@@ -128,6 +128,19 @@ Route::patch('/quotations/{quotation}', [QuotationController::class, 'update'])
     Route::post('/staff', [StaffController::class, 'store'])
         ->name('staff.store');
 
+        /*bhabani*/
+        Route::get('/staff', [StaffController::class, 'index'])
+    ->name('staff.index');
+
+Route::post('/staff', [StaffController::class, 'store'])
+    ->name('staff.store');
+
+Route::patch('/staff/{staff}', [StaffController::class, 'update'])
+    ->name('staff.update');
+
+Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])
+    ->name('staff.destroy');
+
     /*
     |--------------------------------------------------------------------------
     | Payments
