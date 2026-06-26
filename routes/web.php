@@ -87,6 +87,14 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
     */
     Route::get('/event-bookings', [EventBookingController::class, 'index'])
         ->name('event-bookings.index');
+        /*bhabani*/
+        Route::get('/event-bookings', [EventBookingController::class, 'index'])
+    ->name('event-bookings.index');
+
+Route::patch('/event-bookings/{eventBooking}/status', [EventBookingController::class, 'updateStatus'])
+    ->name('event-bookings.update-status');
+    Route::patch('/event-bookings/{eventBooking}/status', [EventBookingController::class, 'updateStatus'])
+    ->name('event-bookings.update-status');
 
     /*
     |--------------------------------------------------------------------------
