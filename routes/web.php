@@ -157,6 +157,13 @@ Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])
     Route::get('/customers', [CustomerController::class, 'index'])
         ->name('customers.index');
 
+/*bhabani*/
+        Route::get('/customers', [CustomerController::class, 'index'])
+    ->name('customers.index');
+
+Route::patch('/customers/{customer}/status', [CustomerController::class, 'updateStatus'])
+    ->name('customers.update-status');
+
     /*
     |--------------------------------------------------------------------------
     | Reports
