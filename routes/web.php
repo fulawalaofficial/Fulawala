@@ -172,6 +172,10 @@ Route::patch('/customers/{customer}/status', [CustomerController::class, 'update
     Route::get('/reports', [ReportController::class, 'index'])
         ->name('reports.index');
 
+/*bhabani*/
+        Route::get('/reports', [ReportController::class, 'index'])
+    ->name('reports.index');
+
     /*
     |--------------------------------------------------------------------------
     | Settings
