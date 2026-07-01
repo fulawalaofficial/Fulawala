@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Address;
 use App\Models\Payment;
 use App\Models\PoojaPacket;
 use App\Models\Subscription;
@@ -11,6 +10,7 @@ use App\Services\RazorpayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class SubscriptionController extends Controller
@@ -21,8 +21,15 @@ class SubscriptionController extends Controller
             'packet_id' => ['required', 'exists:pooja_packets,id'],
             'duration' => ['required', 'integer', 'in:1,3,6,12'],
             'start_date' => ['required', 'date'],
-            'address' => ['nullable', 'string'],
-            'address_id' => ['nullable', 'exists:addresses,id'],
+
+            // Only existing logged-in user's address ID allowed
+            'address_id' => [
+                'required',
+                'integer',
+                Rule::exists('addresses', 'id')->where(function ($query) use ($request) {
+                    return $query->where('user_id', $request->user()->id);
+                }),
+            ],
         ]);
 
         try {
@@ -31,33 +38,13 @@ class SubscriptionController extends Controller
 
                 $start = Carbon::parse($data['start_date']);
                 $end = $start->copy()->addMonths((int) $data['duration'])->subDay();
+
                 $amount = (float) $packet->monthly_price * (int) $data['duration'];
-
-                $addressId = $data['address_id'] ?? null;
-
-                if ($addressId) {
-                    $address = Address::where('id', $addressId)
-                        ->where('user_id', $request->user()->id)
-                        ->firstOrFail();
-
-                    $addressId = $address->id;
-                } else {
-                    $address = Address::create([
-                        'user_id' => $request->user()->id,
-                        'address' => $data['address'] ?? 'Default address',
-                        'city' => '',
-                        'state' => '',
-                        'pincode' => '',
-                        'is_default' => false,
-                    ]);
-
-                    $addressId = $address->id;
-                }
 
                 $subscription = Subscription::create([
                     'user_id' => $request->user()->id,
                     'packet_id' => $packet->id,
-                    'address_id' => $addressId,
+                    'address_id' => $data['address_id'],
                     'start_date' => $start->toDateString(),
                     'end_date' => $end->toDateString(),
                     'duration' => $data['duration'],
@@ -75,6 +62,7 @@ class SubscriptionController extends Controller
                         'user_id' => (string) $request->user()->id,
                         'payment_type' => 'subscription',
                         'subscription_id' => (string) $subscription->id,
+                        'address_id' => (string) $data['address_id'],
                     ]
                 );
 
