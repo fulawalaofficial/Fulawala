@@ -18,11 +18,9 @@ class SubscriptionController extends Controller
     public function store(Request $request, RazorpayService $razorpay)
     {
         $data = $request->validate([
-            'packet_id' => ['required', 'exists:pooja_packets,id'],
+            'packet_id' => ['required', 'integer', 'exists:pooja_packets,id'],
             'duration' => ['required', 'integer', 'in:1,3,6,12'],
             'start_date' => ['required', 'date'],
-
-            // Only existing logged-in user's address ID allowed
             'address_id' => [
                 'required',
                 'integer',
@@ -33,14 +31,20 @@ class SubscriptionController extends Controller
         ]);
 
         try {
-            return DB::transaction(function () use ($request, $data, $razorpay) {
-                $packet = PoojaPacket::findOrFail($data['packet_id']);
+            $packet = PoojaPacket::findOrFail($data['packet_id']);
 
-                $start = Carbon::parse($data['start_date']);
-                $end = $start->copy()->addMonths((int) $data['duration'])->subDay();
+            if (!$packet->monthly_price || $packet->monthly_price <= 0) {
+                return response()->json([
+                    'message' => 'Invalid packet monthly price.',
+                ], 422);
+            }
 
-                $amount = (float) $packet->monthly_price * (int) $data['duration'];
+            $start = Carbon::parse($data['start_date']);
+            $end = $start->copy()->addMonths((int) $data['duration'])->subDay();
 
+            $amount = (float) $packet->monthly_price * (int) $data['duration'];
+
+            return DB::transaction(function () use ($request, $data, $packet, $start, $end, $amount, $razorpay) {
                 $subscription = Subscription::create([
                     'user_id' => $request->user()->id,
                     'packet_id' => $packet->id,
@@ -96,7 +100,9 @@ class SubscriptionController extends Controller
 
             return response()->json([
                 'message' => 'Unable to create subscription payment order.',
-                'error' => config('app.debug') ? $e->getMessage() : null,
+                'error' => $e->getMessage(),
+                'file' => config('app.debug') ? $e->getFile() : null,
+                'line' => config('app.debug') ? $e->getLine() : null,
             ], 422);
         }
     }
