@@ -10,7 +10,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 
 class SubscriptionController extends Controller
 {
@@ -85,17 +85,51 @@ class SubscriptionController extends Controller
         return view('admin.subscriptions.create', compact('customers', 'packets'));
     }
 
+    public function customerAddresses(User $user)
+    {
+        if ($user->role !== 'customer') {
+            return response()->json([
+                'addresses' => [],
+                'message' => 'Invalid customer selected.',
+            ], 422);
+        }
+
+        $addresses = Address::where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->get()
+            ->map(function ($address) {
+                return [
+                    'id' => $address->id,
+                    'label' => $this->formatAddress($address),
+                ];
+            });
+
+        return response()->json([
+            'addresses' => $addresses,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
+            'user_id' => [
+                'required',
+                Rule::exists('users', 'id')->where(function ($query) {
+                    $query->where('role', 'customer');
+                }),
+            ],
             'packet_id' => ['required', 'exists:pooja_packets,id'],
-            'duration' => ['required', 'integer', 'in:1,3,6,12'],
+            'duration' => ['required', 'integer', 'in:1,2,3,6,12'],
             'start_date' => ['required', 'date'],
-            'address' => ['required', 'string', 'max:1000'],
+            'address_id' => [
+                'required',
+                'integer',
+                Rule::exists('addresses', 'id')->where(function ($query) use ($request) {
+                    $query->where('user_id', $request->input('user_id'));
+                }),
+            ],
             'payment_status' => ['required', 'in:Pending,Paid,Failed'],
             'subscription_status' => ['required', 'in:Active,Paused,Cancelled,Expired'],
-            'amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $packet = PoojaPacket::findOrFail($data['packet_id']);
@@ -103,21 +137,17 @@ class SubscriptionController extends Controller
         $startDate = Carbon::parse($data['start_date']);
         $duration = (int) $data['duration'];
 
-        $endDate = $startDate->copy()->addMonths($duration)->subDay();
+        // New calculation:
+        // 1 month = 30 days, 2 months = 60 days, 3 months = 90 days
+        $endDate = Subscription::calculateEndDate($startDate, $duration);
 
-        $amount = $request->filled('amount')
-            ? (float) $data['amount']
-            : ((float) $packet->monthly_price * $duration);
-
-        $address = $this->createAddressForUser(
-            (int) $data['user_id'],
-            $data['address']
-        );
+        // Amount calculation
+        $amount = (float) $packet->monthly_price * $duration;
 
         Subscription::create([
             'user_id' => $data['user_id'],
             'packet_id' => $data['packet_id'],
-            'address_id' => $address?->id,
+            'address_id' => $data['address_id'],
             'start_date' => $startDate->toDateString(),
             'end_date' => $endDate->toDateString(),
             'duration' => $duration,
@@ -131,41 +161,25 @@ class SubscriptionController extends Controller
             ->with('success', 'Subscription created successfully.');
     }
 
-    private function createAddressForUser(int $userId, string $addressText): ?Address
+    private function formatAddress(Address $address): string
     {
-        $address = new Address();
+        $parts = [];
 
-        if (Schema::hasColumn('addresses', 'user_id')) {
-            $address->user_id = $userId;
-        }
-
-        $addressColumn = null;
-
-        foreach (['address', 'address_line', 'full_address', 'line1', 'street_address'] as $column) {
-            if (Schema::hasColumn('addresses', $column)) {
-                $addressColumn = $column;
+        foreach (['address', 'address_line', 'address_line1', 'full_address', 'line1', 'street_address'] as $column) {
+            if (Schema::hasColumn('addresses', $column) && !empty($address->{$column})) {
+                $parts[] = $address->{$column};
                 break;
             }
         }
 
-        if (!$addressColumn) {
-            throw ValidationException::withMessages([
-                'address' => 'No address column found in addresses table. Please add address column or update controller.',
-            ]);
+        foreach (['landmark', 'city', 'state', 'pincode', 'pin_code', 'postal_code'] as $column) {
+            if (Schema::hasColumn('addresses', $column) && !empty($address->{$column})) {
+                $parts[] = $address->{$column};
+            }
         }
 
-        $address->{$addressColumn} = $addressText;
+        $label = trim(implode(', ', array_filter($parts)));
 
-        if (Schema::hasColumn('addresses', 'type')) {
-            $address->type = 'Subscription';
-        }
-
-        if (Schema::hasColumn('addresses', 'status')) {
-            $address->status = 'Active';
-        }
-
-        $address->save();
-
-        return $address;
+        return $label !== '' ? $label : 'Address #' . $address->id;
     }
 }

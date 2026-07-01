@@ -3,279 +3,320 @@
 @section('title', 'Create Subscription')
 
 @section('content')
-<div class="max-w-6xl mx-auto space-y-6">
-
-    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+<div class="max-w-5xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
         <div>
-            <p class="text-sm font-bold text-orange-600 uppercase tracking-wider">Manual Entry</p>
-            <h1 class="text-3xl font-black text-slate-900">Create Subscription</h1>
-            <p class="text-slate-500 mt-1">Add a pooja packet subscription manually for any customer.</p>
+            <h1 class="text-3xl font-black text-gray-900">Create Subscription</h1>
+            <p class="text-gray-500 mt-1">Select customer, address, packet and subscription duration.</p>
         </div>
 
         <a href="{{ route('admin.subscriptions.index') }}"
-           class="inline-flex items-center justify-center rounded-2xl border border-orange-100 bg-white px-5 py-3 font-black text-slate-700 hover:bg-orange-50 transition">
-            ← Back to Subscriptions
+           class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold">
+            Back
         </a>
     </div>
 
-    @if($errors->any())
-        <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
-            <div class="font-black mb-2">Please fix these errors:</div>
-            <ul class="list-disc ml-5 space-y-1">
-                @foreach($errors->all() as $error)
-                    <li class="font-semibold">{{ $error }}</li>
+    @if ($errors->any())
+        <div class="mb-5 rounded-2xl bg-red-50 border border-red-200 p-4 text-red-700">
+            <p class="font-bold mb-2">Please fix these errors:</p>
+            <ul class="list-disc ml-5">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
                 @endforeach
             </ul>
         </div>
     @endif
 
-    <form method="POST" action="{{ route('admin.subscriptions.store') }}" class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <form action="{{ route('admin.subscriptions.store') }}" method="POST"
+          class="bg-white rounded-3xl border border-orange-100 shadow-sm p-6 space-y-6">
         @csrf
 
-        <div class="xl:col-span-2 rounded-3xl bg-white border border-orange-100 shadow-sm p-6 space-y-6">
+        <div class="grid md:grid-cols-2 gap-5">
             <div>
-                <h2 class="text-xl font-black text-slate-900">Subscription Details</h2>
-                <p class="text-sm text-slate-400 mt-1">Select customer, packet and subscription period.</p>
+                <label class="block font-bold text-gray-700 mb-2">Select Customer</label>
+                <select name="user_id" id="user_id"
+                        class="w-full rounded-xl border-gray-300 focus:border-orange-500 focus:ring-orange-500">
+                    <option value="">-- Select Customer --</option>
+                    @foreach ($customers as $customer)
+                        <option value="{{ $customer->id }}"
+                            @selected(old('user_id') == $customer->id)>
+                            {{ $customer->name }}
+                            @if($customer->mobile)
+                                - {{ $customer->mobile }}
+                            @endif
+                            @if($customer->email)
+                                - {{ $customer->email }}
+                            @endif
+                        </option>
+                    @endforeach
+                </select>
+                @error('user_id')
+                    <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                @enderror
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-2">
-                        Customer <span class="text-red-500">*</span>
-                    </label>
-                    <select name="user_id"
-                            required
-                            class="w-full rounded-2xl border border-orange-100 px-4 py-3 focus:outline-none focus:ring-4 focus:ring-orange-100">
-                        <option value="">Select Customer</option>
-                        @foreach($customers as $customer)
-                            <option value="{{ $customer->id }}" @selected(old('user_id') == $customer->id)>
-                                {{ $customer->name }} - {{ $customer->mobile ?? $customer->email }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-2">
-                        Pooja Packet <span class="text-red-500">*</span>
-                    </label>
-                    <select name="packet_id"
-                            id="packet_id"
-                            required
-                            class="w-full rounded-2xl border border-orange-100 px-4 py-3 focus:outline-none focus:ring-4 focus:ring-orange-100">
-                        <option value="" data-price="0">Select Packet</option>
-                        @foreach($packets as $packet)
-                            <option value="{{ $packet->id }}"
-                                    data-price="{{ $packet->monthly_price }}"
-                                    @selected(old('packet_id') == $packet->id)>
-                                {{ $packet->packet_name }} - ₹{{ number_format((float) $packet->monthly_price, 2) }}/month
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-2">
-                        Duration <span class="text-red-500">*</span>
-                    </label>
-                    <select name="duration"
-                            id="duration"
-                            required
-                            class="w-full rounded-2xl border border-orange-100 px-4 py-3 focus:outline-none focus:ring-4 focus:ring-orange-100">
-                        @foreach([1, 3, 6, 12] as $month)
-                            <option value="{{ $month }}" @selected(old('duration', 1) == $month)>
-                                {{ $month }} Month{{ $month > 1 ? 's' : '' }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-2">
-                        Start Date <span class="text-red-500">*</span>
-                    </label>
-                    <input type="date"
-                           name="start_date"
-                           id="start_date"
-                           value="{{ old('start_date', now()->toDateString()) }}"
-                           required
-                           class="w-full rounded-2xl border border-orange-100 px-4 py-3 focus:outline-none focus:ring-4 focus:ring-orange-100">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-2">
-                        Payment Status <span class="text-red-500">*</span>
-                    </label>
-                    <select name="payment_status"
-                            required
-                            class="w-full rounded-2xl border border-orange-100 px-4 py-3 focus:outline-none focus:ring-4 focus:ring-orange-100">
-                        @foreach(['Pending', 'Paid', 'Failed'] as $item)
-                            <option value="{{ $item }}" @selected(old('payment_status', 'Paid') === $item)>
-                                {{ $item }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-black text-slate-700 mb-2">
-                        Subscription Status <span class="text-red-500">*</span>
-                    </label>
-                    <select name="subscription_status"
-                            required
-                            class="w-full rounded-2xl border border-orange-100 px-4 py-3 focus:outline-none focus:ring-4 focus:ring-orange-100">
-                        @foreach(['Active', 'Paused', 'Cancelled', 'Expired'] as $item)
-                            <option value="{{ $item }}" @selected(old('subscription_status', 'Active') === $item)>
-                                {{ $item }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="md:col-span-2">
-                    <label class="block text-sm font-black text-slate-700 mb-2">
-                        Amount
-                    </label>
-                    <div class="relative">
-                        <span class="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">₹</span>
-                        <input type="number"
-                               name="amount"
-                               id="amount"
-                               value="{{ old('amount') }}"
-                               min="0"
-                               step="0.01"
-                               placeholder="Auto calculated from packet price × duration"
-                               class="w-full rounded-2xl border border-orange-100 pl-9 pr-4 py-3 focus:outline-none focus:ring-4 focus:ring-orange-100">
-                    </div>
-                    <p class="text-xs text-slate-400 mt-2">
-                        Leave empty or allow auto calculation. You can also edit the amount manually.
-                    </p>
-                </div>
-
-                <div class="md:col-span-2">
-                    <label class="block text-sm font-black text-slate-700 mb-2">
-                        Delivery Address <span class="text-red-500">*</span>
-                    </label>
-                    <textarea name="address"
-                              rows="4"
-                              required
-                              placeholder="Enter full delivery address..."
-                              class="w-full rounded-2xl border border-orange-100 px-4 py-3 focus:outline-none focus:ring-4 focus:ring-orange-100">{{ old('address') }}</textarea>
-                </div>
+            <div>
+                <label class="block font-bold text-gray-700 mb-2">Select Pooja Packet</label>
+                <select name="packet_id" id="packet_id"
+                        class="w-full rounded-xl border-gray-300 focus:border-orange-500 focus:ring-orange-500">
+                    <option value="">-- Select Packet --</option>
+                    @foreach ($packets as $packet)
+                        <option value="{{ $packet->id }}"
+                                data-monthly-price="{{ (float) $packet->monthly_price }}"
+                            @selected(old('packet_id') == $packet->id)>
+                            {{ $packet->packet_name }} - ₹{{ number_format((float) $packet->monthly_price, 2) }}/month
+                        </option>
+                    @endforeach
+                </select>
+                @error('packet_id')
+                    <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                @enderror
             </div>
         </div>
 
-        <div class="space-y-6">
-            <div class="rounded-3xl bg-gradient-to-br from-orange-500 to-red-500 shadow-lg shadow-orange-200 p-6 text-white">
-                <div class="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-3xl mb-4">
-                    🙏
-                </div>
-                <h3 class="text-2xl font-black">Subscription Summary</h3>
-                <p class="text-white/80 text-sm mt-2">
-                    Amount and end date will be calculated automatically after choosing packet, duration and start date.
-                </p>
+        <div>
+            <label class="block font-bold text-gray-700 mb-2">Customer Addresses</label>
 
-                <div class="mt-6 space-y-3 text-sm">
-                    <div class="flex justify-between gap-4 border-b border-white/20 pb-3">
-                        <span class="text-white/70">Monthly Price</span>
-                        <span class="font-black" id="summary_price">₹0.00</span>
-                    </div>
-
-                    <div class="flex justify-between gap-4 border-b border-white/20 pb-3">
-                        <span class="text-white/70">Duration</span>
-                        <span class="font-black" id="summary_duration">1 Month</span>
-                    </div>
-
-                    <div class="flex justify-between gap-4 border-b border-white/20 pb-3">
-                        <span class="text-white/70">End Date</span>
-                        <span class="font-black" id="summary_end_date">-</span>
-                    </div>
-
-                    <div class="flex justify-between gap-4">
-                        <span class="text-white/70">Total</span>
-                        <span class="font-black text-xl" id="summary_total">₹0.00</span>
-                    </div>
-                </div>
+            <div id="addressList"
+                 class="rounded-2xl border border-gray-200 bg-gray-50 p-4 min-h-[90px]">
+                <p class="text-gray-500">Please select a customer first.</p>
             </div>
 
-            <div class="rounded-3xl bg-white border border-orange-100 shadow-sm p-6">
-                <button type="submit"
-                        class="w-full rounded-2xl bg-slate-900 px-5 py-4 text-white font-black hover:bg-slate-800 transition shadow-lg">
-                    Save Subscription
-                </button>
+            @error('address_id')
+                <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+            @enderror
+        </div>
 
-                <a href="{{ route('admin.subscriptions.index') }}"
-                   class="mt-3 w-full inline-flex justify-center rounded-2xl border border-orange-100 px-5 py-4 font-black text-slate-600 hover:bg-orange-50 transition">
-                    Cancel
-                </a>
+        <div class="grid md:grid-cols-4 gap-5">
+            <div>
+                <label class="block font-bold text-gray-700 mb-2">Duration</label>
+                <select name="duration" id="duration"
+                        class="w-full rounded-xl border-gray-300 focus:border-orange-500 focus:ring-orange-500">
+                    @foreach ([1, 2, 3, 6, 12] as $month)
+                        <option value="{{ $month }}" @selected((int) old('duration', 1) === $month)>
+                            {{ $month }} Month{{ $month > 1 ? 's' : '' }} - {{ $month * 30 }} Days
+                        </option>
+                    @endforeach
+                </select>
+                @error('duration')
+                    <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                @enderror
             </div>
+
+            <div>
+                <label class="block font-bold text-gray-700 mb-2">Start Date</label>
+                <input type="date"
+                       name="start_date"
+                       id="start_date"
+                       value="{{ old('start_date') }}"
+                       class="w-full rounded-xl border-gray-300 focus:border-orange-500 focus:ring-orange-500">
+                @error('start_date')
+                    <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div>
+                <label class="block font-bold text-gray-700 mb-2">End Date</label>
+                <input type="text"
+                       id="end_date_display"
+                       readonly
+                       placeholder="Auto calculate"
+                       class="w-full rounded-xl border-gray-300 bg-gray-100 text-gray-700">
+            </div>
+
+            <div>
+                <label class="block font-bold text-gray-700 mb-2">Total Days</label>
+                <input type="text"
+                       id="total_days"
+                       readonly
+                       placeholder="Auto"
+                       class="w-full rounded-xl border-gray-300 bg-gray-100 text-gray-700">
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-5">
+            <div>
+                <label class="block font-bold text-gray-700 mb-2">Amount</label>
+                <input type="text"
+                       id="amount"
+                       readonly
+                       placeholder="₹0.00"
+                       class="w-full rounded-xl border-gray-300 bg-gray-100 text-gray-700">
+            </div>
+
+            <div>
+                <label class="block font-bold text-gray-700 mb-2">Payment Status</label>
+                <select name="payment_status"
+                        class="w-full rounded-xl border-gray-300 focus:border-orange-500 focus:ring-orange-500">
+                    @foreach (['Pending', 'Paid', 'Failed'] as $item)
+                        <option value="{{ $item }}" @selected(old('payment_status', 'Pending') === $item)>
+                            {{ $item }}
+                        </option>
+                    @endforeach
+                </select>
+                @error('payment_status')
+                    <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div>
+                <label class="block font-bold text-gray-700 mb-2">Subscription Status</label>
+                <select name="subscription_status"
+                        class="w-full rounded-xl border-gray-300 focus:border-orange-500 focus:ring-orange-500">
+                    @foreach (['Active', 'Paused', 'Cancelled', 'Expired'] as $item)
+                        <option value="{{ $item }}" @selected(old('subscription_status', 'Active') === $item)>
+                            {{ $item }}
+                        </option>
+                    @endforeach
+                </select>
+                @error('subscription_status')
+                    <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                @enderror
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t">
+            <a href="{{ route('admin.subscriptions.index') }}"
+               class="px-5 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold">
+                Cancel
+            </a>
+
+            <button type="submit"
+                    class="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold shadow">
+                Create Subscription
+            </button>
         </div>
     </form>
 </div>
 
 <script>
+    const customerSelect = document.getElementById('user_id');
     const packetSelect = document.getElementById('packet_id');
     const durationSelect = document.getElementById('duration');
     const startDateInput = document.getElementById('start_date');
+    const addressList = document.getElementById('addressList');
+    const endDateDisplay = document.getElementById('end_date_display');
+    const totalDaysInput = document.getElementById('total_days');
     const amountInput = document.getElementById('amount');
 
-    const summaryPrice = document.getElementById('summary_price');
-    const summaryDuration = document.getElementById('summary_duration');
-    const summaryEndDate = document.getElementById('summary_end_date');
-    const summaryTotal = document.getElementById('summary_total');
-
-    function formatMoney(value) {
-        return '₹' + Number(value || 0).toFixed(2);
-    }
+    const oldAddressId = @json(old('address_id'));
+    const addressBaseUrl = "{{ url('/admin/subscriptions/customer-addresses') }}";
 
     function formatDate(date) {
-        if (!date || isNaN(date.getTime())) return '-';
-
-        return date.toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        });
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
     }
 
-    function calculateEndDate(startDate, duration) {
-        if (!startDate) return null;
+    function calculateSubscription() {
+        const duration = parseInt(durationSelect.value || '0');
+        const startDateValue = startDateInput.value;
 
-        const date = new Date(startDate);
-        date.setMonth(date.getMonth() + Number(duration || 1));
-        date.setDate(date.getDate() - 1);
-
-        return date;
-    }
-
-    function updateSummary() {
         const selectedPacket = packetSelect.options[packetSelect.selectedIndex];
-        const monthlyPrice = Number(selectedPacket?.dataset?.price || 0);
-        const duration = Number(durationSelect.value || 1);
-        const total = monthlyPrice * duration;
+        const monthlyPrice = selectedPacket
+            ? parseFloat(selectedPacket.getAttribute('data-monthly-price') || '0')
+            : 0;
 
-        summaryPrice.textContent = formatMoney(monthlyPrice);
-        summaryDuration.textContent = duration + ' Month' + (duration > 1 ? 's' : '');
+        const totalDays = duration * 30;
+        totalDaysInput.value = totalDays ? `${totalDays} Days` : '';
 
-        const endDate = calculateEndDate(startDateInput.value, duration);
-        summaryEndDate.textContent = formatDate(endDate);
+        const amount = monthlyPrice * duration;
+        amountInput.value = amount ? `₹${amount.toFixed(2)}` : '₹0.00';
 
-        summaryTotal.textContent = formatMoney(total);
+        if (!startDateValue || !duration) {
+            endDateDisplay.value = '';
+            return;
+        }
 
-        if (!amountInput.dataset.edited) {
-            amountInput.value = total ? total.toFixed(2) : '';
+        const parts = startDateValue.split('-').map(Number);
+        const endDate = new Date(parts[0], parts[1] - 1, parts[2]);
+
+        // Inclusive calculation:
+        // 1 month = 30 days means start date + 29 days.
+        endDate.setDate(endDate.getDate() + totalDays - 1);
+
+        endDateDisplay.value = formatDate(endDate);
+    }
+
+    async function loadCustomerAddresses(selectedAddressId = null) {
+        const userId = customerSelect.value;
+
+        if (!userId) {
+            addressList.innerHTML = `<p class="text-gray-500">Please select a customer first.</p>`;
+            return;
+        }
+
+        addressList.innerHTML = `<p class="text-gray-500">Loading addresses...</p>`;
+
+        try {
+            const response = await fetch(`${addressBaseUrl}/${userId}`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (!data.addresses || data.addresses.length === 0) {
+                addressList.innerHTML = `
+                    <div class="rounded-xl bg-yellow-50 border border-yellow-200 p-4">
+                        <p class="text-yellow-800 font-semibold">No address found for this customer.</p>
+                        <p class="text-yellow-700 text-sm mt-1">
+                            Please add address for this customer first, then create subscription.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            addressList.innerHTML = data.addresses.map(address => {
+                const checked = String(address.id) === String(selectedAddressId) ? 'checked' : '';
+
+                return `
+                    <label class="flex gap-3 items-start bg-white border border-gray-200 rounded-xl p-4 mb-3 cursor-pointer hover:border-orange-300">
+                        <input type="checkbox"
+                               name="address_id"
+                               value="${address.id}"
+                               ${checked}
+                               class="address-checkbox mt-1 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                        <span class="text-gray-700 font-medium">${address.label}</span>
+                    </label>
+                `;
+            }).join('');
+
+            document.querySelectorAll('.address-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function () {
+                    if (this.checked) {
+                        document.querySelectorAll('.address-checkbox').forEach(other => {
+                            if (other !== this) {
+                                other.checked = false;
+                            }
+                        });
+                    }
+                });
+            });
+
+        } catch (error) {
+            addressList.innerHTML = `
+                <div class="rounded-xl bg-red-50 border border-red-200 p-4">
+                    <p class="text-red-700 font-semibold">Unable to load addresses.</p>
+                </div>
+            `;
         }
     }
 
-    packetSelect.addEventListener('change', updateSummary);
-    durationSelect.addEventListener('change', updateSummary);
-    startDateInput.addEventListener('change', updateSummary);
+    customerSelect.addEventListener('change', () => loadCustomerAddresses());
+    packetSelect.addEventListener('change', calculateSubscription);
+    durationSelect.addEventListener('change', calculateSubscription);
+    startDateInput.addEventListener('change', calculateSubscription);
 
-    amountInput.addEventListener('input', function () {
-        amountInput.dataset.edited = 'true';
-        summaryTotal.textContent = formatMoney(amountInput.value);
+    document.addEventListener('DOMContentLoaded', function () {
+        calculateSubscription();
+
+        if (customerSelect.value) {
+            loadCustomerAddresses(oldAddressId);
+        }
     });
-
-    updateSummary();
 </script>
 @endsection
