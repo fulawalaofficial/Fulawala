@@ -20,9 +20,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    Route::post('/subscriptions', [SubscriptionController::class, 'store']);
-    Route::get('/my-subscriptions', [SubscriptionController::class, 'mySubscriptions']);
-
     Route::post('/custom-orders', [CustomOrderController::class, 'store']);
     Route::get('/my-orders', [CustomOrderController::class, 'myOrders']);
 
@@ -30,7 +27,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my-quotations', [EventBookingController::class, 'myQuotations']);
     Route::post('/quotations/{quotation}/accept', [EventBookingController::class, 'acceptQuotation']);
 
+    Route::post('/subscriptions', [SubscriptionController::class, 'store']);
+    Route::get('/my-subscriptions', [SubscriptionController::class, 'mySubscriptions']);
+
     Route::post('/payments/create-order', [PaymentController::class, 'createOrder']);
     Route::post('/payments/verify', [PaymentController::class, 'verify']);
     Route::get('/payments/history', [PaymentController::class, 'history']);
+
+     Route::get('/addresses', [AddressController::class, 'index']);
+    Route::post('/addresses-create', [AddressController::class, 'store']);
+    Route::get('/addresses/{address}', [AddressController::class, 'show']);
+    Route::put('/addresses/{address}', [AddressController::class, 'update']);
+    Route::patch('/addresses/{address}', [AddressController::class, 'update']);
+    Route::patch('/addresses/{address}/default', [AddressController::class, 'makeDefault']);
+    Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
 });
