@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SubscriptionController extends Controller
 {
@@ -94,7 +95,16 @@ class SubscriptionController extends Controller
             ], 422);
         }
 
-        $addresses = Address::where('user_id', $user->id)
+        $ownerColumn = $this->addressOwnerColumn();
+
+        if (!$ownerColumn) {
+            return response()->json([
+                'addresses' => [],
+                'message' => 'addresses table must have user_id column.',
+            ], 422);
+        }
+
+        $addresses = Address::where($ownerColumn, $user->id)
             ->orderByDesc('id')
             ->get()
             ->map(function ($address) {
@@ -102,7 +112,8 @@ class SubscriptionController extends Controller
                     'id' => $address->id,
                     'label' => $this->formatAddress($address),
                 ];
-            });
+            })
+            ->values();
 
         return response()->json([
             'addresses' => $addresses,
@@ -121,33 +132,28 @@ class SubscriptionController extends Controller
             'packet_id' => ['required', 'exists:pooja_packets,id'],
             'duration' => ['required', 'integer', 'in:1,2,3,6,12'],
             'start_date' => ['required', 'date'],
-            'address_id' => [
-                'required',
-                'integer',
-                Rule::exists('addresses', 'id')->where(function ($query) use ($request) {
-                    $query->where('user_id', $request->input('user_id'));
-                }),
-            ],
+            'address_id' => ['nullable', 'integer'],
+            'new_address' => ['nullable', 'string', 'max:1000'],
             'payment_status' => ['required', 'in:Pending,Paid,Failed'],
             'subscription_status' => ['required', 'in:Active,Paused,Cancelled,Expired'],
         ]);
+
+        $userId = (int) $data['user_id'];
+        $addressId = $this->resolveAddressId($userId, $request);
 
         $packet = PoojaPacket::findOrFail($data['packet_id']);
 
         $startDate = Carbon::parse($data['start_date']);
         $duration = (int) $data['duration'];
 
-        // New calculation:
-        // 1 month = 30 days, 2 months = 60 days, 3 months = 90 days
         $endDate = Subscription::calculateEndDate($startDate, $duration);
 
-        // Amount calculation
         $amount = (float) $packet->monthly_price * $duration;
 
         Subscription::create([
-            'user_id' => $data['user_id'],
+            'user_id' => $userId,
             'packet_id' => $data['packet_id'],
-            'address_id' => $data['address_id'],
+            'address_id' => $addressId,
             'start_date' => $startDate->toDateString(),
             'end_date' => $endDate->toDateString(),
             'duration' => $duration,
@@ -161,6 +167,97 @@ class SubscriptionController extends Controller
             ->with('success', 'Subscription created successfully.');
     }
 
+    private function resolveAddressId(int $userId, Request $request): int
+    {
+        $ownerColumn = $this->addressOwnerColumn();
+
+        if (!$ownerColumn) {
+            throw ValidationException::withMessages([
+                'address_id' => 'addresses table must have user_id column.',
+            ]);
+        }
+
+        if ($request->filled('address_id')) {
+            $address = Address::where('id', $request->input('address_id'))
+                ->where($ownerColumn, $userId)
+                ->first();
+
+            if (!$address) {
+                throw ValidationException::withMessages([
+                    'address_id' => 'Selected address does not belong to this customer.',
+                ]);
+            }
+
+            return $address->id;
+        }
+
+        if ($request->filled('new_address')) {
+            $address = $this->createAddressForUser($userId, $request->input('new_address'));
+
+            return $address->id;
+        }
+
+        throw ValidationException::withMessages([
+            'address_id' => 'Please select an address or add a new delivery address.',
+        ]);
+    }
+
+    private function createAddressForUser(int $userId, string $addressText): Address
+    {
+        $ownerColumn = $this->addressOwnerColumn();
+        $addressColumn = $this->mainAddressColumn();
+
+        if (!$ownerColumn) {
+            throw ValidationException::withMessages([
+                'new_address' => 'No user_id column found in addresses table.',
+            ]);
+        }
+
+        if (!$addressColumn) {
+            throw ValidationException::withMessages([
+                'new_address' => 'No address column found in addresses table.',
+            ]);
+        }
+
+        $address = new Address();
+        $address->{$ownerColumn} = $userId;
+        $address->{$addressColumn} = $addressText;
+
+        if (Schema::hasColumn('addresses', 'type')) {
+            $address->type = 'Subscription';
+        }
+
+        if (Schema::hasColumn('addresses', 'status')) {
+            $address->status = 'Active';
+        }
+
+        $address->save();
+
+        return $address;
+    }
+
+    private function addressOwnerColumn(): ?string
+    {
+        foreach (['user_id', 'customer_id'] as $column) {
+            if (Schema::hasColumn('addresses', $column)) {
+                return $column;
+            }
+        }
+
+        return null;
+    }
+
+    private function mainAddressColumn(): ?string
+    {
+        foreach (['address', 'address_line', 'address_line1', 'full_address', 'line1', 'street_address'] as $column) {
+            if (Schema::hasColumn('addresses', $column)) {
+                return $column;
+            }
+        }
+
+        return null;
+    }
+
     private function formatAddress(Address $address): string
     {
         $parts = [];
@@ -172,7 +269,7 @@ class SubscriptionController extends Controller
             }
         }
 
-        foreach (['landmark', 'city', 'state', 'pincode', 'pin_code', 'postal_code'] as $column) {
+        foreach (['landmark', 'area', 'city', 'district', 'state', 'pincode', 'pin_code', 'postal_code'] as $column) {
             if (Schema::hasColumn('addresses', $column) && !empty($address->{$column})) {
                 $parts[] = $address->{$column};
             }

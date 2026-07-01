@@ -25,8 +25,6 @@ class Subscription extends Model
         'amount' => 'decimal:2',
     ];
 
-    public const ALLOWED_DURATIONS = [1, 2, 3, 6, 12];
-
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -58,9 +56,6 @@ class Subscription extends Model
             ? $startDate->copy()
             : Carbon::parse($startDate);
 
-        // Inclusive calculation:
-        // Start date is counted as day 1.
-        // 1 month = 30 days, so end date = start + 29 days.
         return $start->copy()->addDays(self::totalDays($durationMonths) - 1);
     }
 
