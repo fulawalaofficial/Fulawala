@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::get('/pooja-packets', [PoojaPacketController::class, 'index']);
+Route::get('/flower-package', [PoojaPacketController::class, 'index']);
 Route::get('/pooja-packets/{poojaPacket}', [PoojaPacketController::class, 'show']);
 Route::get('/flowers', [FlowerProductController::class, 'index']);
 
@@ -21,6 +21,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [ProfileController::class, 'profile']);
     Route::post('/profile/photo', [ProfileController::class, 'updatePhoto']);
     Route::delete('/profile/photo-delete', [ProfileController::class, 'removePhoto']);
+    Route::get('/profile/photo', [ProfileController::class, 'getPhoto']);
+    Route::post('/profile/photo', [ProfileController::class, 'uploadPhoto']);
+
+    // Both delete URLs supported
+    Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto']);
+    Route::delete('/profile/photo-delete', [ProfileController::class, 'deletePhoto']);
+
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::post('/custom-orders', [CustomOrderController::class, 'store']);
