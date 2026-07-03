@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\FlowerProductController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PoojaPacketController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\AddressController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
