@@ -20,6 +20,7 @@ class Address extends Model
     ];
 
     protected $casts = [
+        'user_id' => 'integer',
         'is_default' => 'boolean',
     ];
 

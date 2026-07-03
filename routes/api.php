@@ -34,11 +34,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/payments/verify', [PaymentController::class, 'verify']);
     Route::get('/payments/history', [PaymentController::class, 'history']);
 
-     Route::get('/addresses', [AddressController::class, 'index']);
+
+    Route::get('/addresses', [AddressController::class, 'index']);
+
+    Route::post('/addresses', [AddressController::class, 'store']);
     Route::post('/addresses-create', [AddressController::class, 'store']);
+
     Route::get('/addresses/{address}', [AddressController::class, 'show']);
+
     Route::put('/addresses/{address}', [AddressController::class, 'update']);
     Route::patch('/addresses/{address}', [AddressController::class, 'update']);
+
     Route::patch('/addresses/{address}/default', [AddressController::class, 'makeDefault']);
+
     Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
 });
