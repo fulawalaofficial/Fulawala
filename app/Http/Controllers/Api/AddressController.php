@@ -6,219 +6,233 @@ use App\Http\Controllers\Controller;
 use App\Models\Address;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class AddressController extends Controller
 {
     public function index(Request $request)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        if (!$user) {
-            return $this->authError();
+            if (!$user) {
+                return $this->authError();
+            }
+
+            $addresses = Address::where('user_id', $user->id)
+                ->orderByDesc('is_default')
+                ->orderByDesc('id')
+                ->get();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Addresses fetched successfully.',
+                'data' => $addresses,
+            ]);
+        } catch (Throwable $e) {
+            return $this->serverError($e);
         }
-
-        $addresses = Address::where('user_id', $user->id)
-            ->orderByDesc('is_default')
-            ->orderByDesc('id')
-            ->get();
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Addresses fetched successfully.',
-            'data' => $addresses,
-        ]);
     }
 
     public function store(Request $request)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        if (!$user) {
-            return $this->authError();
-        }
-
-        $data = $this->validateAddress($request);
-
-        return DB::transaction(function () use ($user, $data) {
-            $hasAddress = Address::where('user_id', $user->id)->exists();
-
-            $makeDefault = !$hasAddress || !empty($data['is_default']);
-
-            if ($makeDefault) {
-                Address::where('user_id', $user->id)->update([
-                    'is_default' => false,
-                ]);
+            if (!$user) {
+                return $this->authError();
             }
 
-            $data['user_id'] = $user->id;
-            $data['is_default'] = $makeDefault;
+            $data = $request->validate([
+                'address_type' => ['required', Rule::in(['home', 'apartment', 'temple', 'office', 'other'])],
+                'name' => ['required', 'string', 'max:255'],
+                'number' => ['required', 'string', 'max:100'],
+                'address' => ['required', 'string', 'max:1000'],
+                'city' => ['required', 'string', 'max:255'],
+                'state' => ['required', 'string', 'max:255'],
+                'pincode' => ['required', 'string', 'max:255'],
+                'landmark' => ['nullable', 'string', 'max:255'],
+                'is_default' => ['nullable', 'boolean'],
+            ]);
 
-            $address = Address::create($data);
+            return DB::transaction(function () use ($user, $request, $data) {
+                $hasAddress = Address::where('user_id', $user->id)->exists();
+
+                $makeDefault = !$hasAddress || $request->boolean('is_default');
+
+                if ($makeDefault) {
+                    Address::where('user_id', $user->id)->update([
+                        'is_default' => 0,
+                    ]);
+                }
+
+                $address = Address::create([
+                    'user_id' => $user->id,
+                    'address_type' => $data['address_type'],
+                    'name' => $data['name'],
+                    'number' => $data['number'],
+                    'address' => $data['address'],
+                    'city' => $data['city'],
+                    'state' => $data['state'],
+                    'pincode' => $data['pincode'],
+                    'landmark' => $data['landmark'] ?? null,
+                    'is_default' => $makeDefault ? 1 : 0,
+                ]);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Address created successfully.',
+                    'data' => $address,
+                ], 201);
+            });
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
+    }
+
+    public function show(Request $request, $id)
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user) {
+                return $this->authError();
+            }
+
+            $address = Address::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$address) {
+                return $this->notFoundError();
+            }
 
             return response()->json([
                 'status' => true,
-                'message' => 'Address created successfully.',
+                'message' => 'Address fetched successfully.',
                 'data' => $address,
-            ], 201);
-        });
+            ]);
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
     }
 
-    public function show(Request $request, Address $address)
+    public function update(Request $request, $id)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        if (!$user) {
-            return $this->authError();
-        }
+            if (!$user) {
+                return $this->authError();
+            }
 
-        if (!$this->isOwner($user->id, $address)) {
-            return $this->notFoundError();
-        }
+            $address = Address::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
 
-        return response()->json([
-            'status' => true,
-            'message' => 'Address fetched successfully.',
-            'data' => $address,
-        ]);
-    }
+            if (!$address) {
+                return $this->notFoundError();
+            }
 
-    public function update(Request $request, Address $address)
-    {
-        $user = $request->user();
+            $data = $request->validate([
+                'address_type' => ['sometimes', 'required', Rule::in(['home', 'apartment', 'temple', 'office', 'other'])],
+                'name' => ['sometimes', 'required', 'string', 'max:255'],
+                'number' => ['sometimes', 'required', 'string', 'max:100'],
+                'address' => ['sometimes', 'required', 'string', 'max:1000'],
+                'city' => ['sometimes', 'required', 'string', 'max:255'],
+                'state' => ['sometimes', 'required', 'string', 'max:255'],
+                'pincode' => ['sometimes', 'required', 'string', 'max:255'],
+                'landmark' => ['nullable', 'string', 'max:255'],
+                'is_default' => ['nullable', 'boolean'],
+            ]);
 
-        if (!$user) {
-            return $this->authError();
-        }
-
-        if (!$this->isOwner($user->id, $address)) {
-            return $this->notFoundError();
-        }
-
-        $data = $this->validateAddress($request, true);
-
-        return DB::transaction(function () use ($user, $address, $data) {
-            if (array_key_exists('is_default', $data)) {
-                if ($data['is_default'] === true) {
+            return DB::transaction(function () use ($user, $request, $address, $data) {
+                if ($request->has('is_default') && $request->boolean('is_default')) {
                     Address::where('user_id', $user->id)->update([
-                        'is_default' => false,
+                        'is_default' => 0,
                     ]);
 
-                    $data['is_default'] = true;
-                } else {
-                    $otherDefaultExists = Address::where('user_id', $user->id)
-                        ->where('id', '!=', $address->id)
-                        ->where('is_default', true)
-                        ->exists();
-
-                    $data['is_default'] = $otherDefaultExists ? false : true;
+                    $data['is_default'] = 1;
                 }
+
+                $address->update($data);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Address updated successfully.',
+                    'data' => $address->fresh(),
+                ]);
+            });
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
+    }
+
+    public function makeDefault(Request $request, $id)
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user) {
+                return $this->authError();
             }
 
-            $address->update($data);
+            $address = Address::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
 
-            return response()->json([
-                'status' => true,
-                'message' => 'Address updated successfully.',
-                'data' => $address->fresh(),
-            ]);
-        });
+            if (!$address) {
+                return $this->notFoundError();
+            }
+
+            return DB::transaction(function () use ($user, $address) {
+                Address::where('user_id', $user->id)->update([
+                    'is_default' => 0,
+                ]);
+
+                $address->update([
+                    'is_default' => 1,
+                ]);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Default address updated successfully.',
+                    'data' => $address->fresh(),
+                ]);
+            });
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
     }
 
-    public function makeDefault(Request $request, Address $address)
+    public function destroy(Request $request, $id)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        if (!$user) {
-            return $this->authError();
-        }
+            if (!$user) {
+                return $this->authError();
+            }
 
-        if (!$this->isOwner($user->id, $address)) {
-            return $this->notFoundError();
-        }
+            $address = Address::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
 
-        return DB::transaction(function () use ($user, $address) {
-            Address::where('user_id', $user->id)->update([
-                'is_default' => false,
-            ]);
-
-            $address->update([
-                'is_default' => true,
-            ]);
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Default address updated successfully.',
-                'data' => $address->fresh(),
-            ]);
-        });
-    }
-
-    public function destroy(Request $request, Address $address)
-    {
-        $user = $request->user();
-
-        if (!$user) {
-            return $this->authError();
-        }
-
-        if (!$this->isOwner($user->id, $address)) {
-            return $this->notFoundError();
-        }
-
-        return DB::transaction(function () use ($user, $address) {
-            $wasDefault = (bool) $address->is_default;
+            if (!$address) {
+                return $this->notFoundError();
+            }
 
             $address->delete();
-
-            if ($wasDefault) {
-                $nextAddress = Address::where('user_id', $user->id)
-                    ->orderByDesc('id')
-                    ->first();
-
-                if ($nextAddress) {
-                    $nextAddress->update([
-                        'is_default' => true,
-                    ]);
-                }
-            }
 
             return response()->json([
                 'status' => true,
                 'message' => 'Address deleted successfully.',
             ]);
-        });
-    }
-
-    private function validateAddress(Request $request, bool $isUpdate = false): array
-    {
-        $required = $isUpdate ? 'sometimes|required' : 'required';
-
-        $data = $request->validate([
-            'address_type' => [
-                $required,
-                Rule::in(['home', 'apartment', 'temple', 'office', 'other']),
-            ],
-            'name' => [$required, 'string', 'max:255'],
-            'number' => [$required, 'string', 'max:100'],
-            'address' => [$required, 'string', 'max:1000'],
-            'city' => [$required, 'string', 'max:100'],
-            'state' => [$required, 'string', 'max:100'],
-            'pincode' => [$required, 'string', 'max:20'],
-            'landmark' => ['nullable', 'string', 'max:255'],
-            'is_default' => ['nullable', 'boolean'],
-        ]);
-
-        if ($request->has('is_default')) {
-            $data['is_default'] = $request->boolean('is_default');
+        } catch (Throwable $e) {
+            return $this->serverError($e);
         }
-
-        return $data;
-    }
-
-    private function isOwner(int $userId, Address $address): bool
-    {
-        return (int) $address->user_id === (int) $userId;
     }
 
     private function authError()
@@ -235,5 +249,21 @@ class AddressController extends Controller
             'status' => false,
             'message' => 'Address not found.',
         ], 404);
+    }
+
+    private function serverError(Throwable $e)
+    {
+        Log::error('Address API Error', [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Server Error',
+            'error' => config('app.debug') ? $e->getMessage() : 'Check Laravel log file.',
+            'line' => config('app.debug') ? $e->getLine() : null,
+        ], 500);
     }
 }
