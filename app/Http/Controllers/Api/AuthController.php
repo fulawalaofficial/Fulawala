@@ -11,7 +11,6 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-        
     public function register(Request $request)
     {
         $data = $request->validate([
@@ -34,47 +33,58 @@ class AuthController extends Controller
         if (!empty($data['address'])) {
             Address::create([
                 'user_id' => $user->id,
+                'address_type' => 'home',
+                'name' => 'Home',
+                'number' => '',
                 'address' => $data['address'],
                 'city' => '',
                 'state' => '',
                 'pincode' => '',
+                'landmark' => null,
                 'is_default' => true,
             ]);
         }
 
         return response()->json([
+            'status' => true,
+            'message' => 'Registration successful.',
             'user' => $user,
             'token' => $user->createToken('mobile')->plainTextToken,
         ], 201);
     }
-    
+
     public function login(Request $request)
     {
         $request->validate([
-            'email' => ['required','email'],
+            'email' => ['required', 'email'],
             'password' => ['required'],
         ]);
 
-        $user = User::where('email', $request->email)->where('role', 'customer')->first();
+        $user = User::where('email', $request->email)
+            ->where('role', 'customer')
+            ->first();
+
         if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages(['email' => ['Invalid customer credentials.']]);
+            throw ValidationException::withMessages([
+                'email' => ['Invalid customer credentials.'],
+            ]);
         }
 
         return response()->json([
+            'status' => true,
+            'message' => 'Login successful.',
             'user' => $user,
             'token' => $user->createToken('mobile')->plainTextToken,
         ]);
-    }
-
-    public function profile(Request $request)
-    {
-        return response()->json($request->user()->load('addresses'));
     }
 
     public function logout(Request $request)
     {
         $request->user()?->currentAccessToken()?->delete();
-        return response()->json(['message' => 'Logged out']);
-    }
 
+        return response()->json([
+            'status' => true,
+            'message' => 'Logged out successfully.',
+        ]);
+    }
 }

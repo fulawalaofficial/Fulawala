@@ -7,11 +7,95 @@ use App\Models\Address;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
-class AddressController extends Controller
+class ProfileController extends Controller
 {
+    public function profile(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return $this->authError();
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Profile fetched successfully.',
+            'data' => $user->load('addresses'),
+        ]);
+    }
+
+    public function updatePhoto(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user) {
+                return $this->authError();
+            }
+
+            $request->validate([
+                'profile_photo' => [
+                    'required',
+                    'image',
+                    'mimes:jpg,jpeg,png,webp',
+                    'max:2048',
+                ],
+            ]);
+
+            if ($user->profile_photo && Storage::disk('public')->exists($user->profile_photo)) {
+                Storage::disk('public')->delete($user->profile_photo);
+            }
+
+            $path = $request->file('profile_photo')->store('profile-photos', 'public');
+
+            $user->update([
+                'profile_photo' => $path,
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Profile photo updated successfully.',
+                'data' => $user->fresh()->load('addresses'),
+            ]);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
+    }
+
+    public function removePhoto(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user) {
+                return $this->authError();
+            }
+
+            if ($user->profile_photo && Storage::disk('public')->exists($user->profile_photo)) {
+                Storage::disk('public')->delete($user->profile_photo);
+            }
+
+            $user->update([
+                'profile_photo' => null,
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Profile photo removed successfully.',
+                'data' => $user->fresh()->load('addresses'),
+            ]);
+        } catch (Throwable $e) {
+            return $this->serverError($e);
+        }
+    }
+
     public function index(Request $request)
     {
         try {
@@ -48,11 +132,11 @@ class AddressController extends Controller
             $data = $request->validate([
                 'address_type' => ['required', Rule::in(['home', 'apartment', 'temple', 'office', 'other'])],
                 'name' => ['required', 'string', 'max:255'],
-                'number' => ['required', 'string', 'max:100'],
+                'number' => ['nullable', 'string', 'max:100'],
                 'address' => ['required', 'string', 'max:1000'],
                 'city' => ['required', 'string', 'max:255'],
                 'state' => ['required', 'string', 'max:255'],
-                'pincode' => ['required', 'string', 'max:255'],
+                'pincode' => ['required', 'string', 'max:20'],
                 'landmark' => ['nullable', 'string', 'max:255'],
                 'is_default' => ['nullable', 'boolean'],
             ]);
@@ -72,7 +156,7 @@ class AddressController extends Controller
                     'user_id' => $user->id,
                     'address_type' => $data['address_type'],
                     'name' => $data['name'],
-                    'number' => $data['number'],
+                    'number' => $data['number'] ?? '',
                     'address' => $data['address'],
                     'city' => $data['city'],
                     'state' => $data['state'],
@@ -87,6 +171,8 @@ class AddressController extends Controller
                     'data' => $address,
                 ], 201);
             });
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             return $this->serverError($e);
         }
@@ -139,11 +225,11 @@ class AddressController extends Controller
             $data = $request->validate([
                 'address_type' => ['sometimes', 'required', Rule::in(['home', 'apartment', 'temple', 'office', 'other'])],
                 'name' => ['sometimes', 'required', 'string', 'max:255'],
-                'number' => ['sometimes', 'required', 'string', 'max:100'],
+                'number' => ['nullable', 'string', 'max:100'],
                 'address' => ['sometimes', 'required', 'string', 'max:1000'],
                 'city' => ['sometimes', 'required', 'string', 'max:255'],
                 'state' => ['sometimes', 'required', 'string', 'max:255'],
-                'pincode' => ['sometimes', 'required', 'string', 'max:255'],
+                'pincode' => ['sometimes', 'required', 'string', 'max:20'],
                 'landmark' => ['nullable', 'string', 'max:255'],
                 'is_default' => ['nullable', 'boolean'],
             ]);
@@ -155,6 +241,8 @@ class AddressController extends Controller
                     ]);
 
                     $data['is_default'] = 1;
+                } elseif ($request->has('is_default')) {
+                    $data['is_default'] = $request->boolean('is_default') ? 1 : 0;
                 }
 
                 $address->update($data);
@@ -165,6 +253,8 @@ class AddressController extends Controller
                     'data' => $address->fresh(),
                 ]);
             });
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             return $this->serverError($e);
         }
@@ -253,7 +343,7 @@ class AddressController extends Controller
 
     private function serverError(Throwable $e)
     {
-        Log::error('Address API Error', [
+        Log::error('Profile API Error', [
             'message' => $e->getMessage(),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
