@@ -10,28 +10,19 @@ use App\Services\RazorpayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Throwable;
 
 class SubscriptionController extends Controller
 {
     public function store(Request $request, RazorpayService $razorpay)
     {
-        $data = $request->validate([
-            'packet_id' => ['required', 'integer', 'exists:pooja_packets,id'],
-            'duration' => ['required', 'integer', 'in:1,3,6,12'],
-            'start_date' => ['required', 'date'],
-            'address_id' => [
-                'required',
-                'integer',
-                Rule::exists('addresses', 'id')->where(function ($query) use ($request) {
-                    return $query->where('user_id', $request->user()->id);
-                }),
-            ],
-        ]);
-
         try {
-            $packet = PoojaPacket::findOrFail($data['packet_id']);
+            $packetId = $request->packet_id;
+            $duration = (int) $request->duration;
+            $startDate = $request->start_date;
+            $addressId = $request->address_id;
+
+            $packet = PoojaPacket::findOrFail($packetId);
 
             if (!$packet->monthly_price || $packet->monthly_price <= 0) {
                 return response()->json([
@@ -39,19 +30,28 @@ class SubscriptionController extends Controller
                 ], 422);
             }
 
-            $start = Carbon::parse($data['start_date']);
-            $end = $start->copy()->addMonths((int) $data['duration'])->subDay();
+            $start = Carbon::parse($startDate);
+            $end = $start->copy()->addMonths($duration)->subDay();
 
-            $amount = (float) $packet->monthly_price * (int) $data['duration'];
+            $amount = (float) $packet->monthly_price * $duration;
 
-            return DB::transaction(function () use ($request, $data, $packet, $start, $end, $amount, $razorpay) {
+            return DB::transaction(function () use (
+                $request,
+                $packet,
+                $duration,
+                $addressId,
+                $start,
+                $end,
+                $amount,
+                $razorpay
+            ) {
                 $subscription = Subscription::create([
                     'user_id' => $request->user()->id,
                     'packet_id' => $packet->id,
-                    'address_id' => $data['address_id'],
+                    'address_id' => $addressId,
                     'start_date' => $start->toDateString(),
                     'end_date' => $end->toDateString(),
-                    'duration' => $data['duration'],
+                    'duration' => $duration,
                     'amount' => $amount,
                     'payment_status' => 'Pending',
                     'subscription_status' => 'Pending',
@@ -66,7 +66,7 @@ class SubscriptionController extends Controller
                         'user_id' => (string) $request->user()->id,
                         'payment_type' => 'subscription',
                         'subscription_id' => (string) $subscription->id,
-                        'address_id' => (string) $data['address_id'],
+                        'address_id' => (string) $addressId,
                     ]
                 );
 
