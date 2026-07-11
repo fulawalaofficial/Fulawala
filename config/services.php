@@ -2,11 +2,19 @@
 
 return [
 
-
     'razorpay' => [
-        'key_id' => env('RAZORPAY_KEY_ID'),
-        'key_secret' => env('RAZORPAY_KEY_SECRET'),
-        'currency' => env('RAZORPAY_CURRENCY', 'INR'),
+        'key_id' => env(
+            'RAZORPAY_KEY_ID'
+        ),
+
+        'key_secret' => env(
+            'RAZORPAY_KEY_SECRET'
+        ),
+
+        'currency' => env(
+            'RAZORPAY_CURRENCY',
+            'INR'
+        ),
     ],
 
 ];
