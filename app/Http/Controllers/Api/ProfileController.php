@@ -3,23 +3,25 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Address;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 class ProfileController extends Controller
 {
-    public function profile(Request $request)
+    /**
+     * Return the authenticated user's profile.
+     */
+    public function show(Request $request): JsonResponse
     {
         $user = $request->user();
 
         if (!$user) {
-            return $this->authError();
+            return $this->unauthenticatedResponse();
         }
 
         return response()->json([
@@ -29,331 +31,253 @@ class ProfileController extends Controller
         ]);
     }
 
-    public function updatePhoto(Request $request)
+    /**
+     * Return the authenticated user's current profile-photo information.
+     */
+    public function getPhoto(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        if (!$user) {
+            return $this->unauthenticatedResponse();
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => $user->profile_photo
+                ? 'Profile photo fetched successfully.'
+                : 'No profile photo is available.',
+            'data' => [
+                'profile_photo' => $user->profile_photo,
+                'profile_photo_url' => $user->profile_photo_url,
+            ],
+        ]);
+    }
+
+    /**
+     * Upload or replace the authenticated user's profile photo.
+     *
+     * The image is saved directly in:
+     * public/uploads/profile-photos
+     *
+     * This approach works reliably on shared hosting and does not require
+     * the "php artisan storage:link" symbolic link.
+     */
+    public function updatePhoto(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return $this->unauthenticatedResponse();
+        }
+
+        $request->validate([
+            'profile_photo' => [
+                'required',
+                'file',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+            ],
+        ]);
+
+        $uploadedFile = $request->file('profile_photo');
+
+        if (!$uploadedFile || !$uploadedFile->isValid()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'The uploaded profile photo is invalid.',
+            ], 422);
+        }
+
+        $uploadDirectory = public_path('uploads/profile-photos');
+        $oldPhotoPath = $user->profile_photo;
+        $newAbsolutePath = null;
+
         try {
-            $user = $request->user();
+            if (!is_dir($uploadDirectory)) {
+                $created = mkdir($uploadDirectory, 0755, true);
 
-            if (!$user) {
-                return $this->authError();
+                if (!$created && !is_dir($uploadDirectory)) {
+                    throw new RuntimeException(
+                        'Unable to create public/uploads/profile-photos directory.'
+                    );
+                }
             }
 
-            $request->validate([
-                'profile_photo' => [
-                    'required',
-                    'image',
-                    'mimes:jpg,jpeg,png,webp',
-                    'max:2048',
-                ],
-            ]);
-
-            if ($user->profile_photo && Storage::disk('public')->exists($user->profile_photo)) {
-                Storage::disk('public')->delete($user->profile_photo);
+            if (!is_writable($uploadDirectory)) {
+                throw new RuntimeException(
+                    'The public/uploads/profile-photos directory is not writable.'
+                );
             }
 
-            $path = $request->file('profile_photo')->store('profile-photos', 'public');
+            $extension = strtolower(
+                $uploadedFile->guessExtension()
+                ?: $uploadedFile->getClientOriginalExtension()
+                ?: 'jpg'
+            );
 
-            $user->update([
-                'profile_photo' => $path,
-            ]);
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+
+            if (!in_array($extension, $allowedExtensions, true)) {
+                $extension = 'jpg';
+            }
+
+            $filename = sprintf(
+                'user-%d-%s.%s',
+                $user->id,
+                Str::uuid()->toString(),
+                $extension
+            );
+
+            $uploadedFile->move($uploadDirectory, $filename);
+
+            $newRelativePath = 'uploads/profile-photos/' . $filename;
+            $newAbsolutePath = public_path($newRelativePath);
+
+            if (!is_file($newAbsolutePath)) {
+                throw new RuntimeException(
+                    'The uploaded file could not be found after saving.'
+                );
+            }
+
+            try {
+                $user->forceFill([
+                    'profile_photo' => $newRelativePath,
+                ])->saveOrFail();
+            } catch (Throwable $databaseException) {
+                if (is_file($newAbsolutePath)) {
+                    @unlink($newAbsolutePath);
+                }
+
+                throw $databaseException;
+            }
+
+            // Delete the previous photo only after the new database value is saved.
+            $this->deletePhysicalPhoto($oldPhotoPath);
+
+            $freshUser = $user->fresh(['addresses']);
 
             return response()->json([
                 'status' => true,
                 'message' => 'Profile photo updated successfully.',
-                'data' => $user->fresh()->load('addresses'),
+                'data' => $freshUser,
             ]);
-        } catch (ValidationException $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            return $this->serverError($e);
+        } catch (Throwable $exception) {
+            if (
+                $newAbsolutePath &&
+                is_file($newAbsolutePath) &&
+                $user->profile_photo !== 'uploads/profile-photos/' . basename($newAbsolutePath)
+            ) {
+                @unlink($newAbsolutePath);
+            }
+
+            Log::error('Profile photo upload failed.', [
+                'user_id' => $user->id,
+                'uploaded_file_name' => $uploadedFile->getClientOriginalName(),
+                'uploaded_file_size' => $uploadedFile->getSize(),
+                'uploaded_file_mime' => $uploadedFile->getMimeType(),
+                'exception_message' => $exception->getMessage(),
+                'exception_file' => $exception->getFile(),
+                'exception_line' => $exception->getLine(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to upload the profile photo.',
+                'error' => config('app.debug')
+                    ? $exception->getMessage()
+                    : null,
+            ], 500);
         }
     }
 
-    public function removePhoto(Request $request)
+    /**
+     * Delete the authenticated user's profile photo.
+     */
+    public function deletePhoto(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        if (!$user) {
+            return $this->unauthenticatedResponse();
+        }
+
+        $oldPhotoPath = $user->profile_photo;
+
+        if (!$oldPhotoPath) {
+            return response()->json([
+                'status' => true,
+                'message' => 'No profile photo is available to delete.',
+                'data' => $user->load('addresses'),
+            ]);
+        }
+
         try {
-            $user = $request->user();
-
-            if (!$user) {
-                return $this->authError();
-            }
-
-            if ($user->profile_photo && Storage::disk('public')->exists($user->profile_photo)) {
-                Storage::disk('public')->delete($user->profile_photo);
-            }
-
-            $user->update([
+            $user->forceFill([
                 'profile_photo' => null,
-            ]);
+            ])->saveOrFail();
+
+            $this->deletePhysicalPhoto($oldPhotoPath);
 
             return response()->json([
                 'status' => true,
-                'message' => 'Profile photo removed successfully.',
-                'data' => $user->fresh()->load('addresses'),
+                'message' => 'Profile photo deleted successfully.',
+                'data' => $user->fresh(['addresses']),
             ]);
-        } catch (Throwable $e) {
-            return $this->serverError($e);
-        }
-    }
-
-    public function index(Request $request)
-    {
-        try {
-            $user = $request->user();
-
-            if (!$user) {
-                return $this->authError();
-            }
-
-            $addresses = Address::where('user_id', $user->id)
-                ->orderByDesc('is_default')
-                ->orderByDesc('id')
-                ->get();
+        } catch (Throwable $exception) {
+            Log::error('Profile photo deletion failed.', [
+                'user_id' => $user->id,
+                'profile_photo' => $oldPhotoPath,
+                'exception_message' => $exception->getMessage(),
+                'exception_file' => $exception->getFile(),
+                'exception_line' => $exception->getLine(),
+            ]);
 
             return response()->json([
-                'status' => true,
-                'message' => 'Addresses fetched successfully.',
-                'data' => $addresses,
-            ]);
-        } catch (Throwable $e) {
-            return $this->serverError($e);
+                'status' => false,
+                'message' => 'Unable to delete the profile photo.',
+                'error' => config('app.debug')
+                    ? $exception->getMessage()
+                    : null,
+            ], 500);
         }
     }
 
-    public function store(Request $request)
+    /**
+     * Delete both the new public-upload format and the old storage-disk format.
+     */
+    private function deletePhysicalPhoto(?string $photoPath): void
     {
-        try {
-            $user = $request->user();
+        if (!$photoPath) {
+            return;
+        }
 
-            if (!$user) {
-                return $this->authError();
-            }
+        $filename = basename(parse_url($photoPath, PHP_URL_PATH) ?: $photoPath);
 
-            $data = $request->validate([
-                'address_type' => ['required', Rule::in(['home', 'apartment', 'temple', 'office', 'other'])],
-                'name' => ['required', 'string', 'max:255'],
-                'number' => ['nullable', 'string', 'max:100'],
-                'address' => ['required', 'string', 'max:1000'],
-                'city' => ['required', 'string', 'max:255'],
-                'state' => ['required', 'string', 'max:255'],
-                'pincode' => ['required', 'string', 'max:20'],
-                'landmark' => ['nullable', 'string', 'max:255'],
-                'is_default' => ['nullable', 'boolean'],
-            ]);
+        if (!$filename || $filename === '.' || $filename === '..') {
+            return;
+        }
 
-            return DB::transaction(function () use ($user, $request, $data) {
-                $hasAddress = Address::where('user_id', $user->id)->exists();
+        $publicFile = public_path('uploads/profile-photos/' . $filename);
 
-                $makeDefault = !$hasAddress || $request->boolean('is_default');
+        if (is_file($publicFile)) {
+            @unlink($publicFile);
+        }
 
-                if ($makeDefault) {
-                    Address::where('user_id', $user->id)->update([
-                        'is_default' => 0,
-                    ]);
-                }
+        // Backward compatibility with files previously stored on the public disk.
+        $legacyStorageFile = 'profile-photos/' . $filename;
 
-                $address = Address::create([
-                    'user_id' => $user->id,
-                    'address_type' => $data['address_type'],
-                    'name' => $data['name'],
-                    'number' => $data['number'] ?? '',
-                    'address' => $data['address'],
-                    'city' => $data['city'],
-                    'state' => $data['state'],
-                    'pincode' => $data['pincode'],
-                    'landmark' => $data['landmark'] ?? null,
-                    'is_default' => $makeDefault ? 1 : 0,
-                ]);
-
-                return response()->json([
-                    'status' => true,
-                    'message' => 'Address created successfully.',
-                    'data' => $address,
-                ], 201);
-            });
-        } catch (ValidationException $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            return $this->serverError($e);
+        if (Storage::disk('public')->exists($legacyStorageFile)) {
+            Storage::disk('public')->delete($legacyStorageFile);
         }
     }
 
-    public function show(Request $request, $id)
-    {
-        try {
-            $user = $request->user();
-
-            if (!$user) {
-                return $this->authError();
-            }
-
-            $address = Address::where('id', $id)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if (!$address) {
-                return $this->notFoundError();
-            }
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Address fetched successfully.',
-                'data' => $address,
-            ]);
-        } catch (Throwable $e) {
-            return $this->serverError($e);
-        }
-    }
-
-    public function update(Request $request, $id)
-    {
-        try {
-            $user = $request->user();
-
-            if (!$user) {
-                return $this->authError();
-            }
-
-            $address = Address::where('id', $id)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if (!$address) {
-                return $this->notFoundError();
-            }
-
-            $data = $request->validate([
-                'address_type' => ['sometimes', 'required', Rule::in(['home', 'apartment', 'temple', 'office', 'other'])],
-                'name' => ['sometimes', 'required', 'string', 'max:255'],
-                'number' => ['nullable', 'string', 'max:100'],
-                'address' => ['sometimes', 'required', 'string', 'max:1000'],
-                'city' => ['sometimes', 'required', 'string', 'max:255'],
-                'state' => ['sometimes', 'required', 'string', 'max:255'],
-                'pincode' => ['sometimes', 'required', 'string', 'max:20'],
-                'landmark' => ['nullable', 'string', 'max:255'],
-                'is_default' => ['nullable', 'boolean'],
-            ]);
-
-            return DB::transaction(function () use ($user, $request, $address, $data) {
-                if ($request->has('is_default') && $request->boolean('is_default')) {
-                    Address::where('user_id', $user->id)->update([
-                        'is_default' => 0,
-                    ]);
-
-                    $data['is_default'] = 1;
-                } elseif ($request->has('is_default')) {
-                    $data['is_default'] = $request->boolean('is_default') ? 1 : 0;
-                }
-
-                $address->update($data);
-
-                return response()->json([
-                    'status' => true,
-                    'message' => 'Address updated successfully.',
-                    'data' => $address->fresh(),
-                ]);
-            });
-        } catch (ValidationException $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            return $this->serverError($e);
-        }
-    }
-
-    public function makeDefault(Request $request, $id)
-    {
-        try {
-            $user = $request->user();
-
-            if (!$user) {
-                return $this->authError();
-            }
-
-            $address = Address::where('id', $id)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if (!$address) {
-                return $this->notFoundError();
-            }
-
-            return DB::transaction(function () use ($user, $address) {
-                Address::where('user_id', $user->id)->update([
-                    'is_default' => 0,
-                ]);
-
-                $address->update([
-                    'is_default' => 1,
-                ]);
-
-                return response()->json([
-                    'status' => true,
-                    'message' => 'Default address updated successfully.',
-                    'data' => $address->fresh(),
-                ]);
-            });
-        } catch (Throwable $e) {
-            return $this->serverError($e);
-        }
-    }
-
-    public function destroy(Request $request, $id)
-    {
-        try {
-            $user = $request->user();
-
-            if (!$user) {
-                return $this->authError();
-            }
-
-            $address = Address::where('id', $id)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if (!$address) {
-                return $this->notFoundError();
-            }
-
-            $address->delete();
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Address deleted successfully.',
-            ]);
-        } catch (Throwable $e) {
-            return $this->serverError($e);
-        }
-    }
-
-    private function authError()
+    private function unauthenticatedResponse(): JsonResponse
     {
         return response()->json([
             'status' => false,
-            'message' => 'Unauthenticated. Please send valid Bearer Token.',
+            'message' => 'Unauthenticated.',
         ], 401);
-    }
-
-    private function notFoundError()
-    {
-        return response()->json([
-            'status' => false,
-            'message' => 'Address not found.',
-        ], 404);
-    }
-
-    private function serverError(Throwable $e)
-    {
-        Log::error('Profile API Error', [
-            'message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ]);
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Server Error',
-            'error' => config('app.debug') ? $e->getMessage() : 'Check Laravel log file.',
-            'line' => config('app.debug') ? $e->getLine() : null,
-        ], 500);
     }
 }
