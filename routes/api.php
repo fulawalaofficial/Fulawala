@@ -31,6 +31,15 @@ Route::get('/flowers', [FlowerProductController::class, 'index']);
 |--------------------------------------------------------------------------
 */
 
+
+Route::get(
+    '/profile-images/{filename}',
+    [ProfileController::class, 'showPhotoFile']
+)
+    ->where('filename', '[A-Za-z0-9._-]+')
+    ->name('profile.images.show');
+
+    
 Route::middleware('auth:sanctum')->group(function () {
     /*
     |--------------------------------------------------------------------------

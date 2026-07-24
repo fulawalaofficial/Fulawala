@@ -57,14 +57,6 @@ class User extends Authenticatable
                 return null;
             }
 
-            /*
-             * Extract only the filename, whether the database contains:
-             *
-             * uploads/profile-photos/file.jpg
-             * profile-photos/file.jpg
-             * storage/profile-photos/file.jpg
-             * https://domain.com/uploads/profile-photos/file.jpg
-             */
             $parsedPath = parse_url($photoPath, PHP_URL_PATH);
             $filename = basename($parsedPath ?: $photoPath);
 
@@ -75,27 +67,13 @@ class User extends Authenticatable
                 return null;
             }
 
-            try {
-                if (Route::has('profile.photo.file')) {
-                    $url = route('profile.photo.file', [
-                        'filename' => $filename,
-                    ]);
-                } else {
-                    $url = url(
-                        '/api/profile/photo-file/' .
-                        rawurlencode($filename)
-                    );
-                }
-            } catch (Throwable) {
-                $url = url(
-                    '/api/profile/photo-file/' .
-                    rawurlencode($filename)
-                );
-            }
+            $url = url(
+                '/api/profile-images/' . rawurlencode($filename)
+            );
 
             /*
-             * Avoid HTTP image URLs in the production mobile application.
-             */
+            * Force HTTPS for production mobile application.
+            */
             if (app()->environment('production')) {
                 $url = preg_replace(
                     '/^http:\/\//i',
@@ -105,15 +83,13 @@ class User extends Authenticatable
             }
 
             /*
-             * Cache-busting value changes whenever a new photo path is saved.
-             */
-            $version = substr(
+            * Prevent React Native/browser from displaying an old cached image.
+            */
+            return $url . '?v=' . substr(
                 md5($photoPath),
                 0,
                 12
             );
-
-            return $url . '?v=' . $version;
         });
     }
 
