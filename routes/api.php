@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\FlowerProductController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PoojaPacketController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
@@ -92,4 +93,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/payments/create-order', [PaymentController::class, 'createOrder']);
     Route::post('/payments/verify', [PaymentController::class, 'verify']);
     Route::get('/payments/history', [PaymentController::class, 'history']);
+
+    Route::get(
+    '/home/current-month-subscriptions',
+    [
+        HomeController::class,
+        'currentMonthSubscriptions',
+    ]
+);
 });

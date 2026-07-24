@@ -152,9 +152,6 @@ class AddressController extends Controller
         ]);
     }
 
-    /**
-     * Delete an address owned by the authenticated customer.
-     */
     public function destroy(
         Request $request,
         Address $address
