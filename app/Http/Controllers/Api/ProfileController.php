@@ -9,12 +9,13 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 class ProfileController extends Controller
 {
     /**
-     * Return the authenticated user's profile.
+     * Get authenticated user profile.
      */
     public function show(Request $request): JsonResponse
     {
@@ -24,15 +25,18 @@ class ProfileController extends Controller
             return $this->unauthenticatedResponse();
         }
 
+        $freshUser = $user->fresh(['addresses'])
+            ?? $user->load('addresses');
+
         return response()->json([
             'status' => true,
             'message' => 'Profile fetched successfully.',
-            'data' => $user->load('addresses'),
+            'data' => $freshUser,
         ]);
     }
 
     /**
-     * Return the authenticated user's current profile-photo information.
+     * Get the authenticated user's profile-photo information.
      */
     public function getPhoto(Request $request): JsonResponse
     {
@@ -42,26 +46,77 @@ class ProfileController extends Controller
             return $this->unauthenticatedResponse();
         }
 
+        $freshUser = $user->fresh() ?? $user;
+
         return response()->json([
             'status' => true,
-            'message' => $user->profile_photo
+            'message' => $freshUser->profile_photo
                 ? 'Profile photo fetched successfully.'
                 : 'No profile photo is available.',
             'data' => [
-                'profile_photo' => $user->profile_photo,
-                'profile_photo_url' => $user->profile_photo_url,
+                'profile_photo' => $freshUser->profile_photo,
+                'profile_photo_url' => $freshUser->profile_photo_url,
+                'photo_exists' => $this->physicalPhotoExists(
+                    $freshUser->profile_photo
+                ),
             ],
         ]);
     }
 
     /**
-     * Upload or replace the authenticated user's profile photo.
+     * Serve a profile-photo file through Laravel.
      *
-     * The image is saved directly in:
-     * public/uploads/profile-photos
-     *
-     * This approach works reliably on shared hosting and does not require
-     * the "php artisan storage:link" symbolic link.
+     * This route can remain public because filenames contain UUID values.
+     */
+    public function photoFile(string $filename): BinaryFileResponse
+    {
+        $safeFilename = basename($filename);
+
+        if (
+            !$safeFilename ||
+            $safeFilename !== $filename ||
+            in_array($safeFilename, ['.', '..'], true)
+        ) {
+            abort(404, 'Profile photo not found.');
+        }
+
+        /*
+         * New format:
+         * public/uploads/profile-photos/filename.jpg
+         */
+        $publicFile = public_path(
+            'uploads/profile-photos/' . $safeFilename
+        );
+
+        if (is_file($publicFile)) {
+            return response()->file($publicFile, [
+                'Cache-Control' => 'public, max-age=86400',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
+        }
+
+        /*
+         * Old format:
+         * storage/app/public/profile-photos/filename.jpg
+         */
+        $legacyRelativePath = 'profile-photos/' . $safeFilename;
+
+        if (Storage::disk('public')->exists($legacyRelativePath)) {
+            $legacyFile = Storage::disk('public')->path(
+                $legacyRelativePath
+            );
+
+            return response()->file($legacyFile, [
+                'Cache-Control' => 'public, max-age=86400',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
+        }
+
+        abort(404, 'Profile photo not found.');
+    }
+
+    /**
+     * Upload or replace profile photo.
      */
     public function updatePhoto(Request $request): JsonResponse
     {
@@ -71,7 +126,7 @@ class ProfileController extends Controller
             return $this->unauthenticatedResponse();
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'profile_photo' => [
                 'required',
                 'file',
@@ -92,34 +147,43 @@ class ProfileController extends Controller
 
         $uploadDirectory = public_path('uploads/profile-photos');
         $oldPhotoPath = $user->profile_photo;
+
+        $newRelativePath = null;
         $newAbsolutePath = null;
+        $databaseSaved = false;
 
         try {
-            if (!is_dir($uploadDirectory)) {
-                $created = mkdir($uploadDirectory, 0755, true);
+            $this->createUploadDirectory($uploadDirectory);
 
-                if (!$created && !is_dir($uploadDirectory)) {
-                    throw new RuntimeException(
-                        'Unable to create public/uploads/profile-photos directory.'
-                    );
-                }
-            }
+            /*
+             * Generate extension from the detected MIME type instead of
+             * relying only on the client-provided filename.
+             */
+            $extension = match ($uploadedFile->getMimeType()) {
+                'image/jpeg', 'image/jpg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                default => strtolower(
+                    $uploadedFile->guessExtension()
+                    ?: $uploadedFile->getClientOriginalExtension()
+                    ?: 'jpg'
+                ),
+            };
 
-            if (!is_writable($uploadDirectory)) {
+            $allowedExtensions = [
+                'jpg',
+                'jpeg',
+                'png',
+                'webp',
+            ];
+
+            if (!in_array($extension, $allowedExtensions, true)) {
                 throw new RuntimeException(
-                    'The public/uploads/profile-photos directory is not writable.'
+                    'Unsupported profile-photo extension.'
                 );
             }
 
-            $extension = strtolower(
-                $uploadedFile->guessExtension()
-                ?: $uploadedFile->getClientOriginalExtension()
-                ?: 'jpg'
-            );
-
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-
-            if (!in_array($extension, $allowedExtensions, true)) {
+            if ($extension === 'jpeg') {
                 $extension = 'jpg';
             }
 
@@ -130,50 +194,64 @@ class ProfileController extends Controller
                 $extension
             );
 
-            $uploadedFile->move($uploadDirectory, $filename);
+            $uploadedFile->move(
+                $uploadDirectory,
+                $filename
+            );
 
             $newRelativePath = 'uploads/profile-photos/' . $filename;
             $newAbsolutePath = public_path($newRelativePath);
 
             if (!is_file($newAbsolutePath)) {
                 throw new RuntimeException(
-                    'The uploaded file could not be found after saving.'
+                    'The uploaded file was not found after saving.'
                 );
             }
 
-            try {
-                $user->forceFill([
-                    'profile_photo' => $newRelativePath,
-                ])->saveOrFail();
-            } catch (Throwable $databaseException) {
-                if (is_file($newAbsolutePath)) {
-                    @unlink($newAbsolutePath);
-                }
+            /*
+             * Make the image readable by the web server.
+             */
+            @chmod($newAbsolutePath, 0644);
 
-                throw $databaseException;
+            $user->forceFill([
+                'profile_photo' => $newRelativePath,
+            ])->saveOrFail();
+
+            $databaseSaved = true;
+
+            /*
+             * Delete the old photo only after the new database value
+             * has been saved successfully.
+             */
+            if ($oldPhotoPath !== $newRelativePath) {
+                $this->deletePhysicalPhoto($oldPhotoPath);
             }
 
-            // Delete the previous photo only after the new database value is saved.
-            $this->deletePhysicalPhoto($oldPhotoPath);
-
-            $freshUser = $user->fresh(['addresses']);
+            $freshUser = $user->fresh(['addresses'])
+                ?? $user->load('addresses');
 
             return response()->json([
                 'status' => true,
                 'message' => 'Profile photo updated successfully.',
                 'data' => $freshUser,
+                'profile_photo_url' => $freshUser->profile_photo_url,
             ]);
         } catch (Throwable $exception) {
+            /*
+             * Delete the newly uploaded file only when the database
+             * was not successfully updated.
+             */
             if (
+                !$databaseSaved &&
                 $newAbsolutePath &&
-                is_file($newAbsolutePath) &&
-                $user->profile_photo !== 'uploads/profile-photos/' . basename($newAbsolutePath)
+                is_file($newAbsolutePath)
             ) {
                 @unlink($newAbsolutePath);
             }
 
             Log::error('Profile photo upload failed.', [
                 'user_id' => $user->id,
+                'new_relative_path' => $newRelativePath,
                 'uploaded_file_name' => $uploadedFile->getClientOriginalName(),
                 'uploaded_file_size' => $uploadedFile->getSize(),
                 'uploaded_file_mime' => $uploadedFile->getMimeType(),
@@ -193,7 +271,7 @@ class ProfileController extends Controller
     }
 
     /**
-     * Delete the authenticated user's profile photo.
+     * Delete authenticated user's profile photo.
      */
     public function deletePhoto(Request $request): JsonResponse
     {
@@ -206,24 +284,36 @@ class ProfileController extends Controller
         $oldPhotoPath = $user->profile_photo;
 
         if (!$oldPhotoPath) {
+            $freshUser = $user->fresh(['addresses'])
+                ?? $user->load('addresses');
+
             return response()->json([
                 'status' => true,
                 'message' => 'No profile photo is available to delete.',
-                'data' => $user->load('addresses'),
+                'data' => $freshUser,
             ]);
         }
 
         try {
+            /*
+             * First remove the database value.
+             */
             $user->forceFill([
                 'profile_photo' => null,
             ])->saveOrFail();
 
+            /*
+             * Then delete the physical file.
+             */
             $this->deletePhysicalPhoto($oldPhotoPath);
+
+            $freshUser = $user->fresh(['addresses'])
+                ?? $user->load('addresses');
 
             return response()->json([
                 'status' => true,
                 'message' => 'Profile photo deleted successfully.',
-                'data' => $user->fresh(['addresses']),
+                'data' => $freshUser,
             ]);
         } catch (Throwable $exception) {
             Log::error('Profile photo deletion failed.', [
@@ -245,34 +335,113 @@ class ProfileController extends Controller
     }
 
     /**
-     * Delete both the new public-upload format and the old storage-disk format.
+     * Create profile-photo directory when it does not exist.
      */
-    private function deletePhysicalPhoto(?string $photoPath): void
+    private function createUploadDirectory(string $directory): void
     {
-        if (!$photoPath) {
-            return;
+        if (!is_dir($directory)) {
+            $created = mkdir($directory, 0755, true);
+
+            if (!$created && !is_dir($directory)) {
+                throw new RuntimeException(
+                    'Unable to create the profile-photo upload directory.'
+                );
+            }
         }
 
-        $filename = basename(parse_url($photoPath, PHP_URL_PATH) ?: $photoPath);
-
-        if (!$filename || $filename === '.' || $filename === '..') {
-            return;
-        }
-
-        $publicFile = public_path('uploads/profile-photos/' . $filename);
-
-        if (is_file($publicFile)) {
-            @unlink($publicFile);
-        }
-
-        // Backward compatibility with files previously stored on the public disk.
-        $legacyStorageFile = 'profile-photos/' . $filename;
-
-        if (Storage::disk('public')->exists($legacyStorageFile)) {
-            Storage::disk('public')->delete($legacyStorageFile);
+        if (!is_writable($directory)) {
+            throw new RuntimeException(
+                'The profile-photo upload directory is not writable.'
+            );
         }
     }
 
+    /**
+     * Check whether the physical photo exists.
+     */
+    private function physicalPhotoExists(?string $photoPath): bool
+    {
+        $filename = $this->extractPhotoFilename($photoPath);
+
+        if (!$filename) {
+            return false;
+        }
+
+        $publicFile = public_path(
+            'uploads/profile-photos/' . $filename
+        );
+
+        if (is_file($publicFile)) {
+            return true;
+        }
+
+        return Storage::disk('public')->exists(
+            'profile-photos/' . $filename
+        );
+    }
+
+    /**
+     * Delete both new and legacy profile-photo formats.
+     */
+    private function deletePhysicalPhoto(?string $photoPath): void
+    {
+        $filename = $this->extractPhotoFilename($photoPath);
+
+        if (!$filename) {
+            return;
+        }
+
+        try {
+            $publicFile = public_path(
+                'uploads/profile-photos/' . $filename
+            );
+
+            if (is_file($publicFile)) {
+                @unlink($publicFile);
+            }
+
+            $legacyStorageFile = 'profile-photos/' . $filename;
+
+            if (Storage::disk('public')->exists($legacyStorageFile)) {
+                Storage::disk('public')->delete($legacyStorageFile);
+            }
+        } catch (Throwable $exception) {
+            /*
+             * Do not fail the API response after the database was
+             * already updated. Log the cleanup problem instead.
+             */
+            Log::warning('Unable to delete physical profile photo.', [
+                'profile_photo' => $photoPath,
+                'exception_message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Safely extract a filename from a path or URL.
+     */
+    private function extractPhotoFilename(?string $photoPath): ?string
+    {
+        if (!$photoPath) {
+            return null;
+        }
+
+        $urlPath = parse_url($photoPath, PHP_URL_PATH);
+        $filename = basename($urlPath ?: $photoPath);
+
+        if (
+            !$filename ||
+            in_array($filename, ['.', '..'], true)
+        ) {
+            return null;
+        }
+
+        return $filename;
+    }
+
+    /**
+     * Unauthenticated JSON response.
+     */
     private function unauthenticatedResponse(): JsonResponse
     {
         return response()->json([

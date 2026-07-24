@@ -7,18 +7,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\HasApiTokens;
+use Throwable;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * Attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'name',
         'mobile',
@@ -29,30 +25,15 @@ class User extends Authenticatable
         'profile_photo',
     ];
 
-    /**
-     * Attributes hidden from JSON responses.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Attributes automatically included in JSON responses.
-     *
-     * @var array<int, string>
-     */
     protected $appends = [
         'profile_photo_url',
     ];
 
-    /**
-     * Attribute casts.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -62,13 +43,10 @@ class User extends Authenticatable
     }
 
     /**
-     * Generate the full profile-photo URL.
+     * Generate a reliable URL for the profile photo.
      *
-     * New value example:
-     * uploads/profile-photos/user-1-uuid.png
-     *
-     * Old value example:
-     * profile-photos/user-1-uuid.png
+     * The URL points to a Laravel route instead of directly accessing
+     * public/uploads. This avoids shared-hosting public-path problems.
      */
     protected function profilePhotoUrl(): Attribute
     {
@@ -79,25 +57,63 @@ class User extends Authenticatable
                 return null;
             }
 
-            if (filter_var($photoPath, FILTER_VALIDATE_URL)) {
-                return $photoPath;
+            /*
+             * Extract only the filename, whether the database contains:
+             *
+             * uploads/profile-photos/file.jpg
+             * profile-photos/file.jpg
+             * storage/profile-photos/file.jpg
+             * https://domain.com/uploads/profile-photos/file.jpg
+             */
+            $parsedPath = parse_url($photoPath, PHP_URL_PATH);
+            $filename = basename($parsedPath ?: $photoPath);
+
+            if (
+                !$filename ||
+                in_array($filename, ['.', '..'], true)
+            ) {
+                return null;
             }
 
-            $normalizedPath = ltrim(
-                str_replace('\\', '/', $photoPath),
-                '/'
+            try {
+                if (Route::has('profile.photo.file')) {
+                    $url = route('profile.photo.file', [
+                        'filename' => $filename,
+                    ]);
+                } else {
+                    $url = url(
+                        '/api/profile/photo-file/' .
+                        rawurlencode($filename)
+                    );
+                }
+            } catch (Throwable) {
+                $url = url(
+                    '/api/profile/photo-file/' .
+                    rawurlencode($filename)
+                );
+            }
+
+            /*
+             * Avoid HTTP image URLs in the production mobile application.
+             */
+            if (app()->environment('production')) {
+                $url = preg_replace(
+                    '/^http:\/\//i',
+                    'https://',
+                    $url
+                ) ?: $url;
+            }
+
+            /*
+             * Cache-busting value changes whenever a new photo path is saved.
+             */
+            $version = substr(
+                md5($photoPath),
+                0,
+                12
             );
 
-            if (Str::startsWith($normalizedPath, 'uploads/')) {
-                return asset($normalizedPath);
-            }
-
-            if (Str::startsWith($normalizedPath, 'storage/')) {
-                return asset($normalizedPath);
-            }
-
-            // Backward compatibility for the former public-disk path.
-            return asset('storage/' . $normalizedPath);
+            return $url . '?v=' . $version;
         });
     }
 
