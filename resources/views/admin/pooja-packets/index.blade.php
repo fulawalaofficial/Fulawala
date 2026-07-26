@@ -114,10 +114,21 @@
                             <td class="p-4">
                                 <div class="flex items-center gap-3">
                                     <div class="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center">
-                                        @if($packet->image)
-                                            <img src="{{ asset($packet->image) }}"
-                                                 alt="{{ $packet->packet_name }}"
-                                                 class="w-full h-full object-cover">
+                                        @if($packet->image_url)
+                                            <img
+                                                src="{{ $packet->image_url }}"
+                                                alt="{{ $packet->packet_name }}"
+                                                class="w-full h-full object-cover"
+                                                loading="lazy"
+                                                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                            >
+
+                                            <span
+                                                class="text-orange-500 font-black text-xl w-full h-full items-center justify-center"
+                                                style="display: none;"
+                                            >
+                                                🌸
+                                            </span>
                                         @else
                                             <span class="text-orange-500 font-black text-xl">🌸</span>
                                         @endif
