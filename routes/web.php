@@ -51,7 +51,13 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
 
     Route::patch('/custom-orders/{customOrder}/status', [CustomOrderController::class, 'updateStatus'])
         ->name('custom-orders.update-status');
+    Route::get('/custom-orders', [CustomOrderController::class, 'index'])
+    ->name('custom-orders.index');
 
+Route::patch(
+    '/custom-orders/{customOrder}/status',
+    [CustomOrderController::class, 'updateStatus']
+)->name('custom-orders.update-status');
     /*
     |--------------------------------------------------------------------------
     | Subscriptions

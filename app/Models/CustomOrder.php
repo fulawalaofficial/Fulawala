@@ -8,6 +8,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CustomOrder extends Model
 {
+    /**
+     * Available custom-order statuses.
+     */
+    public const ORDER_STATUSES = [
+        'Order Placed',
+        'Confirmed',
+        'Preparing',
+        'Ready for Delivery',
+        'Out for Delivery',
+        'Delivered',
+        'Cancelled',
+    ];
+
     protected $fillable = [
         'user_id',
         'address_id',
