@@ -5,37 +5,55 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\FlowerProduct;
 use App\Models\PoojaPacket;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class PoojaPacketController extends Controller
 {
-    public function index(Request $request)
+    /**
+     * Display all pooja packets.
+     */
+    public function index(Request $request): View
     {
-        $search = trim($request->get('search', ''));
-        $status = $request->get('status', '');
-        $packageType = $request->get('package_type', '');
+        $search = trim((string) $request->get('search', ''));
+        $status = (string) $request->get('status', '');
+        $packageType = (string) $request->get('package_type', '');
 
         $query = PoojaPacket::query();
 
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('packet_name', 'like', "%{$search}%")
+            $query->where(function ($query) use ($search): void {
+                $query
+                    ->where('packet_name', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%")
                     ->orWhere('package_type', 'like', "%{$search}%");
             });
         }
 
-        if ($status === 'Active' || $status === 'Inactive') {
+        if (in_array($status, ['Active', 'Inactive'], true)) {
             $query->where('status', $status);
         }
 
-        if (in_array($packageType, ['Monthly', 'Three Month', 'Six Month', 'One Year'])) {
+        $allowedPackageTypes = [
+            'Monthly',
+            'Three Month',
+            'Six Month',
+            'One Year',
+        ];
+
+        if (in_array($packageType, $allowedPackageTypes, true)) {
             $query->where('package_type', $packageType);
         }
 
-        $packets = $query->latest()->paginate(20)->withQueryString();
+        $packets = $query
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
 
         $stats = [
             'total' => PoojaPacket::count(),
@@ -52,15 +70,24 @@ class PoojaPacketController extends Controller
         ));
     }
 
-    public function create()
+    /**
+     * Display create packet form.
+     */
+    public function create(): View
     {
         $packet = new PoojaPacket();
         $flowers = $this->getFlowersForForm();
 
-        return view('admin.pooja-packets.form', compact('packet', 'flowers'));
+        return view('admin.pooja-packets.form', compact(
+            'packet',
+            'flowers'
+        ));
     }
 
-    public function store(Request $request)
+    /**
+     * Store a new packet.
+     */
+    public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
 
@@ -75,20 +102,34 @@ class PoojaPacketController extends Controller
             ->with('success', 'Pooja package added successfully.');
     }
 
-    public function edit(PoojaPacket $poojaPacket)
+    /**
+     * Display edit packet form.
+     */
+    public function edit(PoojaPacket $poojaPacket): View
     {
         $packet = $poojaPacket;
         $flowers = $this->getFlowersForForm();
 
-        return view('admin.pooja-packets.form', compact('packet', 'flowers'));
+        return view('admin.pooja-packets.form', compact(
+            'packet',
+            'flowers'
+        ));
     }
 
-    public function update(Request $request, PoojaPacket $poojaPacket)
-    {
+    /**
+     * Update packet.
+     */
+    public function update(
+        Request $request,
+        PoojaPacket $poojaPacket
+    ): RedirectResponse {
         $data = $this->validated($request);
 
         if ($request->hasFile('image')) {
-            $data['image'] = $this->uploadImage($request, $poojaPacket);
+            $data['image'] = $this->uploadImage(
+                $request,
+                $poojaPacket
+            );
         }
 
         $poojaPacket->update($data);
@@ -98,21 +139,24 @@ class PoojaPacketController extends Controller
             ->with('success', 'Pooja package updated successfully.');
     }
 
-    public function destroy(PoojaPacket $poojaPacket)
-    {
-        if ($poojaPacket->image) {
-            $oldImage = public_path($poojaPacket->image);
-
-            if (file_exists($oldImage)) {
-                unlink($oldImage);
-            }
-        }
+    /**
+     * Delete packet and its photo.
+     */
+    public function destroy(
+        PoojaPacket $poojaPacket
+    ): RedirectResponse {
+        $this->deletePacketImage($poojaPacket);
 
         $poojaPacket->delete();
 
-        return back()->with('success', 'Pooja package deleted successfully.');
+        return redirect()
+            ->route('admin.pooja-packets.index')
+            ->with('success', 'Pooja package deleted successfully.');
     }
 
+    /**
+     * Get active flowers for the package form.
+     */
     private function getFlowersForForm()
     {
         $query = FlowerProduct::query();
@@ -121,36 +165,110 @@ class PoojaPacketController extends Controller
             $query->where('status', 'Active');
         }
 
-        return $query->orderBy('flower_name')->get();
+        return $query
+            ->orderBy('flower_name')
+            ->get();
     }
 
-    private function validated(Request $request)
+    /**
+     * Validate and prepare packet information.
+     */
+    private function validated(Request $request): array
     {
         $data = $request->validate([
-            'packet_name' => ['required', 'string', 'max:255'],
-            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'description' => ['nullable', 'string'],
+            'packet_name' => [
+                'required',
+                'string',
+                'max:255',
+            ],
 
-            'package_type' => ['required', 'in:Monthly,Three Month,Six Month,One Year'],
-            'status' => ['required', 'in:Active,Inactive'],
+            'image' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:2048',
+            ],
 
-            'flower_ids' => ['required', 'array', 'min:1'],
-            'flower_ids.*' => ['nullable', 'integer'],
+            'description' => [
+                'nullable',
+                'string',
+            ],
 
-            'flower_units' => ['nullable', 'array'],
-            'flower_units.*' => ['nullable', 'string', 'max:50'],
+            'package_type' => [
+                'required',
+                'in:Monthly,Three Month,Six Month,One Year',
+            ],
 
-            'quantities' => ['nullable', 'array'],
-            'quantities.*' => ['nullable', 'numeric', 'min:0'],
+            'status' => [
+                'required',
+                'in:Active,Inactive',
+            ],
 
-            'prices' => ['nullable', 'array'],
-            'prices.*' => ['nullable', 'numeric', 'min:0'],
+            'flower_ids' => [
+                'required',
+                'array',
+                'min:1',
+            ],
 
-            'flower_mrp_prices' => ['nullable', 'array'],
-            'flower_mrp_prices.*' => ['nullable', 'numeric', 'min:0'],
+            'flower_ids.*' => [
+                'nullable',
+                'integer',
+            ],
 
-            'flower_sale_prices' => ['nullable', 'array'],
-            'flower_sale_prices.*' => ['nullable', 'numeric', 'min:0'],
+            'flower_units' => [
+                'nullable',
+                'array',
+            ],
+
+            'flower_units.*' => [
+                'nullable',
+                'string',
+                'max:50',
+            ],
+
+            'quantities' => [
+                'nullable',
+                'array',
+            ],
+
+            'quantities.*' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
+
+            'prices' => [
+                'nullable',
+                'array',
+            ],
+
+            'prices.*' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
+
+            'flower_mrp_prices' => [
+                'nullable',
+                'array',
+            ],
+
+            'flower_mrp_prices.*' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
+
+            'flower_sale_prices' => [
+                'nullable',
+                'array',
+            ],
+
+            'flower_sale_prices.*' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
         ]);
 
         $durationMap = [
@@ -167,7 +285,11 @@ class PoojaPacketController extends Controller
         $mrpPrices = $request->input('flower_mrp_prices', []);
         $salePrices = $request->input('flower_sale_prices', []);
 
-        $validFlowerIds = array_values(array_filter($flowerIds));
+        $validFlowerIds = array_values(
+            array_filter($flowerIds, function ($flowerId) {
+                return filled($flowerId);
+            })
+        );
 
         if (empty($validFlowerIds)) {
             throw ValidationException::withMessages([
@@ -175,39 +297,52 @@ class PoojaPacketController extends Controller
             ]);
         }
 
-        $flowers = FlowerProduct::whereIn('id', $validFlowerIds)->get()->keyBy('id');
+        $flowers = FlowerProduct::whereIn('id', $validFlowerIds)
+            ->get()
+            ->keyBy('id');
 
         $includedFlowers = [];
         $packageMrpTotal = 0;
         $packageSaleTotal = 0;
 
         foreach ($flowerIds as $index => $flowerId) {
-            if (!$flowerId) {
+            if (blank($flowerId)) {
                 continue;
             }
 
-            $flower = $flowers->get($flowerId);
+            $flower = $flowers->get((int) $flowerId);
 
             if (!$flower) {
                 continue;
             }
 
-            $unit = $units[$index] ?? '';
-            $quantity = $quantities[$index] ?? '';
-            $price = $prices[$index] ?? '';
-            $flowerMrp = $mrpPrices[$index] ?? '';
-            $flowerSale = $salePrices[$index] ?? '';
+            $unit = trim((string) ($units[$index] ?? ''));
+            $quantityValue = $quantities[$index] ?? '';
+            $priceValue = $prices[$index] ?? '';
+            $flowerMrpValue = $mrpPrices[$index] ?? '';
+            $flowerSaleValue = $salePrices[$index] ?? '';
 
-            if ($unit === '' || $quantity === '' || $price === '') {
+            if (
+                $unit === '' ||
+                $quantityValue === '' ||
+                $priceValue === ''
+            ) {
                 throw ValidationException::withMessages([
-                    'flower_ids' => 'Flower unit, quantity and price are required.',
+                    'flower_ids' =>
+                        'Flower unit, quantity and price are required.',
                 ]);
             }
 
-            $quantity = (float) $quantity;
-            $price = (float) $price;
-            $flowerMrp = $flowerMrp !== '' ? (float) $flowerMrp : $price;
-            $flowerSale = $flowerSale !== '' ? (float) $flowerSale : $price;
+            $quantity = (float) $quantityValue;
+            $price = (float) $priceValue;
+
+            $flowerMrp = $flowerMrpValue !== ''
+                ? (float) $flowerMrpValue
+                : $price;
+
+            $flowerSale = $flowerSaleValue !== ''
+                ? (float) $flowerSaleValue
+                : $price;
 
             $lineMrpTotal = $quantity * $flowerMrp;
             $lineSaleTotal = $quantity * $flowerSale;
@@ -217,7 +352,7 @@ class PoojaPacketController extends Controller
 
             $includedFlowers[] = [
                 'flower_id' => (int) $flower->id,
-                'flower_name' => $flower->flower_name,
+                'flower_name' => (string) $flower->flower_name,
                 'unit' => $unit,
                 'quantity' => $quantity,
                 'price' => $price,
@@ -230,19 +365,23 @@ class PoojaPacketController extends Controller
 
         if (empty($includedFlowers)) {
             throw ValidationException::withMessages([
-                'flower_ids' => 'Please select at least one valid flower.',
+                'flower_ids' =>
+                    'Please select at least one valid flower.',
             ]);
         }
 
         $data['included_flowers'] = $includedFlowers;
-        $data['duration_months'] = $durationMap[$data['package_type']] ?? 1;
 
-        // Auto calculated package totals
-        $data['mrp_price'] = $packageMrpTotal;
-        $data['sale_price'] = $packageSaleTotal;
+        $data['duration_months'] =
+            $durationMap[$data['package_type']] ?? 1;
 
-        // Keep old mobile app/API compatible
-        $data['monthly_price'] = $packageSaleTotal;
+        $data['mrp_price'] = round($packageMrpTotal, 2);
+        $data['sale_price'] = round($packageSaleTotal, 2);
+
+        /*
+         * Keep old API and mobile application compatible.
+         */
+        $data['monthly_price'] = round($packageSaleTotal, 2);
         $data['weekly_price'] = null;
         $data['daily_quantity'] = null;
 
@@ -258,31 +397,77 @@ class PoojaPacketController extends Controller
         return $data;
     }
 
-    private function uploadImage(Request $request, PoojaPacket $packet = null)
-    {
-        if (!$request->hasFile('image')) {
-            return $packet ? $packet->image : null;
+    /**
+     * Upload image using Laravel public storage.
+     *
+     * Database value example:
+     * pooja-packets/abc123.jpg
+     *
+     * Actual file:
+     * storage/app/public/pooja-packets/abc123.jpg
+     *
+     * Public URL:
+     * https://fulawala.com/storage/pooja-packets/abc123.jpg
+     */
+    private function uploadImage(
+        Request $request,
+        ?PoojaPacket $packet = null
+    ): string {
+        $image = $request->file('image');
+
+        if (!$image || !$image->isValid()) {
+            throw ValidationException::withMessages([
+                'image' => 'Please upload a valid package photo.',
+            ]);
         }
 
-        if ($packet && $packet->image) {
-            $oldImage = public_path($packet->image);
+        /*
+         * Store the new image before deleting the old image.
+         */
+        $path = $image->store('pooja-packets', 'public');
 
-            if (file_exists($oldImage)) {
-                unlink($oldImage);
+        if (!$path) {
+            throw ValidationException::withMessages([
+                'image' => 'Package photo could not be uploaded.',
+            ]);
+        }
+
+        if ($packet) {
+            $this->deletePacketImage($packet);
+        }
+
+        return $path;
+    }
+
+    /**
+     * Delete both new storage images and old public/uploads images.
+     */
+    private function deletePacketImage(PoojaPacket $packet): void
+    {
+        $path = $packet->imageStoragePath();
+
+        if (blank($path)) {
+            return;
+        }
+
+        /*
+         * Delete old image stored directly inside:
+         * public/uploads/pooja-packets
+         */
+        if (Str::startsWith($path, 'uploads/')) {
+            $publicFile = public_path($path);
+
+            if (is_file($publicFile)) {
+                @unlink($publicFile);
             }
         }
 
-        $folder = public_path('uploads/pooja-packets');
-
-        if (!file_exists($folder)) {
-            mkdir($folder, 0755, true);
+        /*
+         * Delete image stored inside:
+         * storage/app/public
+         */
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
         }
-
-        $file = $request->file('image');
-        $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-
-        $file->move($folder, $fileName);
-
-        return 'uploads/pooja-packets/' . $fileName;
     }
 }
