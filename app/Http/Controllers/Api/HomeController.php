@@ -15,15 +15,16 @@ class HomeController extends Controller
     /**
      * Return home-page data for the authenticated user.
      *
-     * Response includes:
-     * 1. Active subscriptions available in the current month
+     * Includes:
+     * 1. Current-month active subscriptions
      * 2. Current-month customized flower orders
      */
-    public function currentMonthSubscriptions(Request $request): JsonResponse
-    {
+    public function currentMonthSubscriptions(
+        Request $request
+    ): JsonResponse {
         try {
             /*
-             * Get the authenticated user.
+             * Get authenticated user from the Sanctum token.
              */
             $user = $request->user();
 
@@ -35,7 +36,7 @@ class HomeController extends Controller
             }
 
             /*
-             * Carbon uses the timezone configured in config/app.php.
+             * Current date according to config/app.php timezone.
              */
             $now = Carbon::now();
 
@@ -50,11 +51,8 @@ class HomeController extends Controller
                 ->toDateString();
 
             /*
-             * Get active subscriptions available during
-             * the current month.
-             *
-             * This also includes subscriptions that started
-             * in an earlier month but are still active.
+             * Get paid and active subscriptions that overlap
+             * with the current month.
              */
             $subscriptions = Subscription::query()
                 ->where('user_id', $user->id)
@@ -70,13 +68,10 @@ class HomeController extends Controller
                 ->get();
 
             /*
-             * Get customized flower orders whose delivery date
-             * falls within the current month.
+             * Get customized flower orders belonging to the user.
              *
-             * Each order includes:
-             * - Delivery address
-             * - Order items
-             * - Flower details for every item
+             * The orders are filtered by current-month delivery date.
+             * Every order includes its address, items and flower details.
              */
             $customOrders = CustomOrder::query()
                 ->where('user_id', $user->id)
@@ -91,8 +86,7 @@ class HomeController extends Controller
                 ->get();
 
             /*
-             * Custom-order status counts can be useful
-             * for displaying order-summary cards on the home page.
+             * Customized-order status summary.
              */
             $customOrderSummary = [
                 'order_placed' => $customOrders
@@ -136,24 +130,21 @@ class HomeController extends Controller
                 ],
 
                 /*
-                 * Existing subscription fields are maintained
-                 * so the current mobile-app code continues working.
+                 * Subscription data.
+                 *
+                 * The original "data" key is maintained so existing
+                 * mobile-application code continues working.
                  */
                 'has_subscription' => $subscriptions->isNotEmpty(),
-
                 'total_subscriptions' => $subscriptions->count(),
-
                 'data' => $subscriptions,
 
                 /*
-                 * Customized-order information.
+                 * Customized-order data.
                  */
                 'has_custom_orders' => $customOrders->isNotEmpty(),
-
                 'total_custom_orders' => $customOrders->count(),
-
                 'custom_order_summary' => $customOrderSummary,
-
                 'custom_orders' => $customOrders,
             ]);
         } catch (Throwable $e) {
