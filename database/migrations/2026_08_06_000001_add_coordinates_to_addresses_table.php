@@ -8,33 +8,37 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('addresses', function (Blueprint $table): void {
-            if (!Schema::hasColumn('addresses', 'latitude')) {
-                $table->decimal('latitude', 10, 7)->nullable()->after('landmark');
-            }
+        if (!Schema::hasColumn('addresses', 'latitude')) {
+            Schema::table('addresses', function (Blueprint $table): void {
+                $table
+                    ->decimal('latitude', 10, 7)
+                    ->nullable()
+                    ->after('is_default');
+            });
+        }
 
-            if (!Schema::hasColumn('addresses', 'longitude')) {
-                $table->decimal('longitude', 10, 7)->nullable()->after('latitude');
-            }
-        });
+        if (!Schema::hasColumn('addresses', 'longitude')) {
+            Schema::table('addresses', function (Blueprint $table): void {
+                $table
+                    ->decimal('longitude', 10, 7)
+                    ->nullable()
+                    ->after('latitude');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('addresses', function (Blueprint $table): void {
-            $columns = [];
+        if (Schema::hasColumn('addresses', 'longitude')) {
+            Schema::table('addresses', function (Blueprint $table): void {
+                $table->dropColumn('longitude');
+            });
+        }
 
-            if (Schema::hasColumn('addresses', 'latitude')) {
-                $columns[] = 'latitude';
-            }
-
-            if (Schema::hasColumn('addresses', 'longitude')) {
-                $columns[] = 'longitude';
-            }
-
-            if ($columns !== []) {
-                $table->dropColumn($columns);
-            }
-        });
+        if (Schema::hasColumn('addresses', 'latitude')) {
+            Schema::table('addresses', function (Blueprint $table): void {
+                $table->dropColumn('latitude');
+            });
+        }
     }
 };

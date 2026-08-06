@@ -26,6 +26,7 @@ class Address extends Model
     ];
 
     protected $casts = [
+        'user_id' => 'integer',
         'is_default' => 'boolean',
         'latitude' => 'float',
         'longitude' => 'float',
@@ -37,7 +38,7 @@ class Address extends Model
     }
 
     /**
-     * Full printable address used by the delivery screen and map fallback.
+     * Full printable address used by delivery screens and map fallbacks.
      */
     public function getFullAddressAttribute(): string
     {
@@ -47,6 +48,17 @@ class Address extends Model
             $this->city,
             $this->state,
             $this->pincode,
-        ])->filter()->implode(', ');
+        ])
+            ->filter(fn ($value) => filled($value))
+            ->implode(', ');
+    }
+
+    /**
+     * Determine whether both GPS coordinates are available.
+     */
+    public function hasCoordinates(): bool
+    {
+        return $this->latitude !== null
+            && $this->longitude !== null;
     }
 }

@@ -39,6 +39,10 @@ class AddressController extends Controller
 
     /**
      * Create an address for the authenticated customer.
+     *
+     * Latitude and longitude are accepted from the mobile application.
+     * They are temporarily optional so the existing app continues working
+     * until its automatic GPS-location update is installed.
      */
     public function store(Request $request): JsonResponse
     {
@@ -53,7 +57,7 @@ class AddressController extends Controller
 
         $data = $this->validatedData($request);
 
-        $address = DB::transaction(function () use ($user, $data) {
+        $address = DB::transaction(function () use ($user, $data): Address {
             $makeDefault = (bool) ($data['is_default'] ?? false);
 
             /*
@@ -79,6 +83,8 @@ class AddressController extends Controller
                 'pincode' => $data['pincode'],
                 'landmark' => $data['landmark'] ?? null,
                 'is_default' => $makeDefault,
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
             ]);
         });
 
@@ -121,12 +127,30 @@ class AddressController extends Controller
 
         $data = $this->validatedData($request);
 
-        DB::transaction(function () use ($user, $ownedAddress, $data) {
-            $makeDefault = (bool) ($data['is_default'] ?? false);
+        DB::transaction(function () use (
+            $user,
+            $ownedAddress,
+            $data
+        ): void {
+            $makeDefault = array_key_exists('is_default', $data)
+                ? (bool) $data['is_default']
+                : (bool) $ownedAddress->is_default;
+
+            /*
+             * A customer must always have one default address.
+             * Therefore, the only existing address cannot be unmarked.
+             */
+            $hasAnotherAddress = $user->addresses()
+                ->whereKeyNot($ownedAddress->getKey())
+                ->exists();
+
+            if (!$hasAnotherAddress) {
+                $makeDefault = true;
+            }
 
             if ($makeDefault) {
                 $user->addresses()
-                    ->where('id', '!=', $ownedAddress->getKey())
+                    ->whereKeyNot($ownedAddress->getKey())
                     ->update([
                         'is_default' => false,
                     ]);
@@ -142,7 +166,34 @@ class AddressController extends Controller
                 'pincode' => $data['pincode'],
                 'landmark' => $data['landmark'] ?? null,
                 'is_default' => $makeDefault,
+                'latitude' => array_key_exists('latitude', $data)
+                    ? $data['latitude']
+                    : $ownedAddress->latitude,
+                'longitude' => array_key_exists('longitude', $data)
+                    ? $data['longitude']
+                    : $ownedAddress->longitude,
             ]);
+
+            /*
+             * If the previous default address was unmarked, make another
+             * address the default automatically.
+             */
+            if (!$makeDefault) {
+                $defaultExists = $user->addresses()
+                    ->where('is_default', true)
+                    ->exists();
+
+                if (!$defaultExists) {
+                    $nextAddress = $user->addresses()
+                        ->whereKeyNot($ownedAddress->getKey())
+                        ->latest('id')
+                        ->first();
+
+                    $nextAddress?->update([
+                        'is_default' => true,
+                    ]);
+                }
+            }
         });
 
         return response()->json([
@@ -152,6 +203,9 @@ class AddressController extends Controller
         ]);
     }
 
+    /**
+     * Delete an address owned by the authenticated customer.
+     */
     public function destroy(
         Request $request,
         Address $address
@@ -176,20 +230,22 @@ class AddressController extends Controller
             ], 404);
         }
 
-        DB::transaction(function () use ($user, $ownedAddress) {
+        DB::transaction(function () use (
+            $user,
+            $ownedAddress
+        ): void {
             $wasDefault = (bool) $ownedAddress->is_default;
+
             $ownedAddress->delete();
 
             if ($wasDefault) {
                 $nextAddress = $user->addresses()
-                    ->orderByDesc('id')
+                    ->latest('id')
                     ->first();
 
-                if ($nextAddress) {
-                    $nextAddress->update([
-                        'is_default' => true,
-                    ]);
-                }
+                $nextAddress?->update([
+                    'is_default' => true,
+                ]);
             }
         });
 
@@ -249,6 +305,18 @@ class AddressController extends Controller
             'is_default' => [
                 'sometimes',
                 'boolean',
+            ],
+            'latitude' => [
+                'sometimes',
+                'nullable',
+                'numeric',
+                'between:-90,90',
+            ],
+            'longitude' => [
+                'sometimes',
+                'nullable',
+                'numeric',
+                'between:-180,180',
             ],
         ]);
     }
