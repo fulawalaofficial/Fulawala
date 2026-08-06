@@ -97,6 +97,13 @@
             'desc' => 'Delivery',
         ],
         [
+            'label' => 'Today Deliveries',
+            'route' => 'admin.today-deliveries.index',
+            'active' => 'admin.today-deliveries.*',
+            'icon' => '🗺️',
+            'desc' => 'Route & Map',
+        ],
+        [
             'label' => 'Event Bookings',
             'route' => 'admin.event-bookings.index',
             'active' => 'admin.event-bookings.*',
