@@ -14,190 +14,140 @@ use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\StaffController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\SubscriptionDeliveryController;
+use App\Http\Controllers\Admin\TodayDeliveryController;
+use App\Http\Controllers\Website\ContactController;
 use App\Http\Controllers\Website\WebsiteController;
-
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/admin/dashboard');
+/*
+|--------------------------------------------------------------------------
+| Admin authentication
+|--------------------------------------------------------------------------
+*/
+Route::redirect('/admin', '/admin/dashboard');
 
-Route::get('/admin/login', [AuthController::class, 'showLogin'])->name('admin.login');
-Route::post('/admin/login', [AuthController::class, 'login'])->name('admin.login.submit');
+Route::get('/admin/login', [AuthController::class, 'showLogin'])
+    ->name('admin.login');
 
-Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
+Route::post('/admin/login', [AuthController::class, 'login'])
+    ->name('admin.login.submit');
 
-    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+Route::prefix('admin')
+    ->name('admin.')
+    ->middleware('auth')
+    ->group(function (): void {
+        Route::post('/logout', [AuthController::class, 'logout'])
+            ->name('logout');
 
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard', [DashboardController::class, 'index'])
+            ->name('dashboard');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Pooja Packets
-    |--------------------------------------------------------------------------
-    */
-    Route::resource('pooja-packets', PoojaPacketController::class)->except(['show']);
+        Route::resource('pooja-packets', PoojaPacketController::class)
+            ->except(['show']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Flowers
-    |--------------------------------------------------------------------------
-    */
-    Route::resource('flowers', FlowerProductController::class)->except(['show']);
+        Route::resource('flowers', FlowerProductController::class)
+            ->except(['show']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Custom Orders
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/custom-orders', [CustomOrderController::class, 'index'])
-        ->name('custom-orders.index');
+        /* Today delivery operations page. */
+        Route::get('/today-deliveries', [TodayDeliveryController::class, 'index'])
+            ->name('today-deliveries.index');
 
-    Route::patch('/custom-orders/{customOrder}/status', [CustomOrderController::class, 'updateStatus'])
-        ->name('custom-orders.update-status');
-    Route::get('/custom-orders', [CustomOrderController::class, 'index'])
-    ->name('custom-orders.index');
+        Route::patch(
+            '/today-deliveries/addresses/{address}/coordinates',
+            [TodayDeliveryController::class, 'saveCoordinates']
+        )->name('today-deliveries.coordinates');
 
-    Route::patch(
-        '/custom-orders/{customOrder}/status',
-        [CustomOrderController::class, 'updateStatus']
-    )->name('custom-orders.update-status');
-    /*
-    |--------------------------------------------------------------------------
-    | Subscriptions
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/subscriptions', [SubscriptionController::class, 'index'])
-        ->name('subscriptions.index');
+        /* Custom orders. */
+        Route::get('/custom-orders', [CustomOrderController::class, 'index'])
+            ->name('custom-orders.index');
 
-    Route::get('/subscriptions/create', [SubscriptionController::class, 'create'])
-        ->name('subscriptions.create');
+        Route::patch(
+            '/custom-orders/{customOrder}/status',
+            [CustomOrderController::class, 'updateStatus']
+        )->name('custom-orders.update-status');
 
-    Route::post('/subscriptions', [SubscriptionController::class, 'store'])
-        ->name('subscriptions.store');
+        /* Subscriptions. */
+        Route::get('/subscriptions', [SubscriptionController::class, 'index'])
+            ->name('subscriptions.index');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Daily Deliveries
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/daily-deliveries', [SubscriptionDeliveryController::class, 'index'])
-        ->name('daily-deliveries.index');
+        Route::get('/subscriptions/create', [SubscriptionController::class, 'create'])
+            ->name('subscriptions.create');
 
-    Route::post('/daily-deliveries/generate-today', [SubscriptionDeliveryController::class, 'generateToday'])
-        ->name('daily-deliveries.generate-today');
+        Route::post('/subscriptions', [SubscriptionController::class, 'store'])
+            ->name('subscriptions.store');
 
-    Route::patch('/daily-deliveries/{delivery}/status', [SubscriptionDeliveryController::class, 'updateStatus'])
-        ->name('daily-deliveries.update-status');
+        /* Daily subscription deliveries. */
+        Route::get('/daily-deliveries', [SubscriptionDeliveryController::class, 'index'])
+            ->name('daily-deliveries.index');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Event Bookings
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/event-bookings', [EventBookingController::class, 'index'])
-        ->name('event-bookings.index');
-        /*bhabani*/
+        Route::post(
+            '/daily-deliveries/generate-today',
+            [SubscriptionDeliveryController::class, 'generateToday']
+        )->name('daily-deliveries.generate-today');
+
+        Route::patch(
+            '/daily-deliveries/{delivery}/status',
+            [SubscriptionDeliveryController::class, 'updateStatus']
+        )->name('daily-deliveries.update-status');
+
+        /* Event bookings. */
         Route::get('/event-bookings', [EventBookingController::class, 'index'])
-    ->name('event-bookings.index');
+            ->name('event-bookings.index');
 
-Route::patch('/event-bookings/{eventBooking}/status', [EventBookingController::class, 'updateStatus'])
-    ->name('event-bookings.update-status');
-    Route::patch('/event-bookings/{eventBooking}/status', [EventBookingController::class, 'updateStatus'])
-    ->name('event-bookings.update-status');
+        Route::patch(
+            '/event-bookings/{eventBooking}/status',
+            [EventBookingController::class, 'updateStatus']
+        )->name('event-bookings.update-status');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Quotations
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/quotations', [QuotationController::class, 'index'])
-        ->name('quotations.index');
-
-    Route::post('/quotations', [QuotationController::class, 'store'])
-        ->name('quotations.store');
-
-        /*bhabani*/
+        /* Quotations. */
         Route::get('/quotations', [QuotationController::class, 'index'])
-    ->name('quotations.index');
+            ->name('quotations.index');
 
-Route::post('/quotations', [QuotationController::class, 'store'])
-    ->name('quotations.store');
+        Route::post('/quotations', [QuotationController::class, 'store'])
+            ->name('quotations.store');
 
-Route::patch('/quotations/{quotation}', [QuotationController::class, 'update'])
-    ->name('quotations.update');
+        Route::patch('/quotations/{quotation}', [QuotationController::class, 'update'])
+            ->name('quotations.update');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Staff
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/staff', [StaffController::class, 'index'])
-        ->name('staff.index');
-
-    Route::post('/staff', [StaffController::class, 'store'])
-        ->name('staff.store');
-
-        /*bhabani*/
+        /* Staff. */
         Route::get('/staff', [StaffController::class, 'index'])
-    ->name('staff.index');
+            ->name('staff.index');
 
-Route::post('/staff', [StaffController::class, 'store'])
-    ->name('staff.store');
+        Route::post('/staff', [StaffController::class, 'store'])
+            ->name('staff.store');
 
-Route::patch('/staff/{staff}', [StaffController::class, 'update'])
-    ->name('staff.update');
+        Route::patch('/staff/{staff}', [StaffController::class, 'update'])
+            ->name('staff.update');
 
-Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])
-    ->name('staff.destroy');
+        Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])
+            ->name('staff.destroy');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Payments
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/payments', [PaymentController::class, 'index'])
-        ->name('payments.index');
+        Route::get('/payments', [PaymentController::class, 'index'])
+            ->name('payments.index');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Customers
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/customers', [CustomerController::class, 'index'])
-        ->name('customers.index');
-
-/*bhabani*/
         Route::get('/customers', [CustomerController::class, 'index'])
-    ->name('customers.index');
+            ->name('customers.index');
 
-Route::patch('/customers/{customer}/status', [CustomerController::class, 'updateStatus'])
-    ->name('customers.update-status');
+        Route::patch(
+            '/customers/{customer}/status',
+            [CustomerController::class, 'updateStatus']
+        )->name('customers.update-status');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Reports
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/reports', [ReportController::class, 'index'])
-        ->name('reports.index');
-
-/*bhabani*/
         Route::get('/reports', [ReportController::class, 'index'])
-    ->name('reports.index');
+            ->name('reports.index');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Settings
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/settings', [SettingController::class, 'index'])
-        ->name('settings.index');
+        Route::get('/settings', [SettingController::class, 'index'])
+            ->name('settings.index');
 
-    Route::post('/settings', [SettingController::class, 'update'])
-        ->name('settings.update');
-});
+        Route::post('/settings', [SettingController::class, 'update'])
+            ->name('settings.update');
+    });
 
-
-
+/*
+|--------------------------------------------------------------------------
+| Public website
+|--------------------------------------------------------------------------
+*/
 Route::name('website.')->group(function (): void {
     Route::get('/', [WebsiteController::class, 'home'])->name('home');
     Route::get('/about', [WebsiteController::class, 'about'])->name('about');
@@ -207,7 +157,9 @@ Route::name('website.')->group(function (): void {
     Route::get('/event-decoration', [WebsiteController::class, 'events'])->name('events');
     Route::get('/gallery', [WebsiteController::class, 'gallery'])->name('gallery');
     Route::get('/contact', [WebsiteController::class, 'contact'])->name('contact');
-    Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.submit');
+    Route::post('/contact', [ContactController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('contact.submit');
     Route::get('/privacy-policy', [WebsiteController::class, 'privacy'])->name('privacy');
     Route::get('/terms-and-conditions', [WebsiteController::class, 'terms'])->name('terms');
 });

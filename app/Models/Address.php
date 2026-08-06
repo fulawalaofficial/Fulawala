@@ -21,14 +21,32 @@ class Address extends Model
         'pincode',
         'landmark',
         'is_default',
+        'latitude',
+        'longitude',
     ];
 
     protected $casts = [
         'is_default' => 'boolean',
+        'latitude' => 'float',
+        'longitude' => 'float',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Full printable address used by the delivery screen and map fallback.
+     */
+    public function getFullAddressAttribute(): string
+    {
+        return collect([
+            $this->address,
+            $this->landmark,
+            $this->city,
+            $this->state,
+            $this->pincode,
+        ])->filter()->implode(', ');
     }
 }
