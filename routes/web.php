@@ -14,6 +14,8 @@ use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\StaffController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\SubscriptionDeliveryController;
+use App\Http\Controllers\Website\WebsiteController;
+
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/admin/dashboard');
@@ -54,10 +56,10 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
     Route::get('/custom-orders', [CustomOrderController::class, 'index'])
     ->name('custom-orders.index');
 
-Route::patch(
-    '/custom-orders/{customOrder}/status',
-    [CustomOrderController::class, 'updateStatus']
-)->name('custom-orders.update-status');
+    Route::patch(
+        '/custom-orders/{customOrder}/status',
+        [CustomOrderController::class, 'updateStatus']
+    )->name('custom-orders.update-status');
     /*
     |--------------------------------------------------------------------------
     | Subscriptions
@@ -192,4 +194,20 @@ Route::patch('/customers/{customer}/status', [CustomerController::class, 'update
 
     Route::post('/settings', [SettingController::class, 'update'])
         ->name('settings.update');
+});
+
+
+
+Route::name('website.')->group(function (): void {
+    Route::get('/', [WebsiteController::class, 'home'])->name('home');
+    Route::get('/about', [WebsiteController::class, 'about'])->name('about');
+    Route::get('/flowers', [WebsiteController::class, 'flowers'])->name('flowers');
+    Route::get('/pooja-packets', [WebsiteController::class, 'poojaPackets'])->name('pooja-packets');
+    Route::get('/subscriptions', [WebsiteController::class, 'subscriptions'])->name('subscriptions');
+    Route::get('/event-decoration', [WebsiteController::class, 'events'])->name('events');
+    Route::get('/gallery', [WebsiteController::class, 'gallery'])->name('gallery');
+    Route::get('/contact', [WebsiteController::class, 'contact'])->name('contact');
+    Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact.submit');
+    Route::get('/privacy-policy', [WebsiteController::class, 'privacy'])->name('privacy');
+    Route::get('/terms-and-conditions', [WebsiteController::class, 'terms'])->name('terms');
 });

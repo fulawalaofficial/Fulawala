@@ -7,9 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\HasApiTokens;
-use Throwable;
 
 class User extends Authenticatable
 {
@@ -23,6 +21,8 @@ class User extends Authenticatable
         'role',
         'status',
         'profile_photo',
+        'last_login_at',
+        'last_login_ip',
     ];
 
     protected $hidden = [
@@ -38,15 +38,13 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
 
     /**
      * Generate a reliable URL for the profile photo.
-     *
-     * The URL points to a Laravel route instead of directly accessing
-     * public/uploads. This avoids shared-hosting public-path problems.
      */
     protected function profilePhotoUrl(): Attribute
     {
@@ -57,8 +55,14 @@ class User extends Authenticatable
                 return null;
             }
 
-            $parsedPath = parse_url($photoPath, PHP_URL_PATH);
-            $filename = basename($parsedPath ?: $photoPath);
+            $parsedPath = parse_url(
+                $photoPath,
+                PHP_URL_PATH
+            );
+
+            $filename = basename(
+                $parsedPath ?: $photoPath
+            );
 
             if (
                 !$filename ||
@@ -68,12 +72,10 @@ class User extends Authenticatable
             }
 
             $url = url(
-                '/api/profile-images/' . rawurlencode($filename)
+                '/api/profile-images/' .
+                rawurlencode($filename)
             );
 
-            /*
-            * Force HTTPS for production mobile application.
-            */
             if (app()->environment('production')) {
                 $url = preg_replace(
                     '/^http:\/\//i',
@@ -82,9 +84,6 @@ class User extends Authenticatable
                 ) ?: $url;
             }
 
-            /*
-            * Prevent React Native/browser from displaying an old cached image.
-            */
             return $url . '?v=' . substr(
                 md5($photoPath),
                 0,
@@ -116,6 +115,25 @@ class User extends Authenticatable
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * All phones/devices used by this customer.
+     */
+    public function devices(): HasMany
+    {
+        return $this->hasMany(UserDevice::class);
+    }
+
+    /**
+     * Devices that can currently receive notifications.
+     */
+    public function notificationDevices(): HasMany
+    {
+        return $this->devices()
+            ->where('is_active', true)
+            ->where('notifications_enabled', true)
+            ->whereNotNull('fcm_token');
     }
 
     public function isAdmin(): bool
