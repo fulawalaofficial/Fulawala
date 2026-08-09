@@ -43,9 +43,6 @@ class User extends Authenticatable
         ];
     }
 
-    /**
-     * Generate a reliable URL for the profile photo.
-     */
     protected function profilePhotoUrl(): Attribute
     {
         return Attribute::get(function (): ?string {
@@ -117,17 +114,11 @@ class User extends Authenticatable
         return $this->hasMany(Payment::class);
     }
 
-    /**
-     * All phones/devices used by this customer.
-     */
     public function devices(): HasMany
     {
         return $this->hasMany(UserDevice::class);
     }
 
-    /**
-     * Devices that can currently receive notifications.
-     */
     public function notificationDevices(): HasMany
     {
         return $this->devices()
