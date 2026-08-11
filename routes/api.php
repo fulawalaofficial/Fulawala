@@ -53,7 +53,10 @@ Route::get('/profile-images/{filename}', [
     ProfileController::class,
     'showPhotoFile',
 ])
-    ->where('filename', '[A-Za-z0-9._-]+')
+    ->where(
+        'filename',
+        '[A-Za-z0-9._-]+'
+    )
     ->name('profile.images.show');
 
 /*
@@ -62,189 +65,243 @@ Route::get('/profile-images/{filename}', [
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth:sanctum')->group(function (): void {
+Route::middleware(
+    'auth:sanctum'
+)->group(
+    function (): void {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Home
-    |--------------------------------------------------------------------------
-    */
+        /*
+        |--------------------------------------------------------------------------
+        | Home
+        |--------------------------------------------------------------------------
+        */
 
-    Route::get('/home', [
-        HomeController::class,
-        'currentMonthSubscriptions',
-    ]);
+        Route::get('/home', [
+            HomeController::class,
+            'currentMonthSubscriptions',
+        ]);
 
-    /*
-     * Legacy route for older mobile application builds.
-     */
-    Route::get('/home/current-month-subscriptions', [
-        HomeController::class,
-        'currentMonthSubscriptions',
-    ]);
+        Route::get(
+            '/home/current-month-subscriptions',
+            [
+                HomeController::class,
+                'currentMonthSubscriptions',
+            ]
+        );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Profile and profile photo
-    |--------------------------------------------------------------------------
-    */
+        /*
+        |--------------------------------------------------------------------------
+        | Profile
+        |--------------------------------------------------------------------------
+        */
 
-    Route::get('/profile', [
-        ProfileController::class,
-        'show',
-    ]);
+        Route::get('/profile', [
+            ProfileController::class,
+            'show',
+        ]);
 
-    Route::get('/profile/photo', [
-        ProfileController::class,
-        'getPhoto',
-    ]);
+        Route::get('/profile/photo', [
+            ProfileController::class,
+            'getPhoto',
+        ]);
 
-    Route::post('/profile/photo', [
-        ProfileController::class,
-        'updatePhoto',
-    ]);
+        Route::post('/profile/photo', [
+            ProfileController::class,
+            'updatePhoto',
+        ]);
 
-    Route::delete('/profile/photo', [
-        ProfileController::class,
-        'deletePhoto',
-    ]);
+        Route::delete('/profile/photo', [
+            ProfileController::class,
+            'deletePhoto',
+        ]);
 
-    /*
-     * Legacy delete route for older mobile application builds.
-     */
-    Route::delete('/profile/photo-delete', [
-        ProfileController::class,
-        'deletePhoto',
-    ]);
+        Route::delete(
+            '/profile/photo-delete',
+            [
+                ProfileController::class,
+                'deletePhoto',
+            ]
+        );
 
-    Route::post('/logout', [
-        AuthController::class,
-        'logout',
-    ]);
+        /*
+        |--------------------------------------------------------------------------
+        | Authentication / Device
+        |--------------------------------------------------------------------------
+        */
 
-    /*
-    |--------------------------------------------------------------------------
-    | Customer addresses
-    |--------------------------------------------------------------------------
-    */
+        Route::post('/logout', [
+            AuthController::class,
+            'logout',
+        ]);
 
-    Route::get('/addresses', [
-        AddressController::class,
-        'index',
-    ]);
+        Route::post(
+            '/device-token',
+            [
+                AuthController::class,
+                'updateDeviceToken',
+            ]
+        );
 
-    /*
-     * Recommended REST endpoint for the updated mobile application.
-     */
-    Route::post('/addresses', [
-        AddressController::class,
-        'store',
-    ]);
+        /*
+        |--------------------------------------------------------------------------
+        | Customer addresses
+        |--------------------------------------------------------------------------
+        */
 
-    /*
-     * Legacy endpoint retained for the current mobile application.
-     */
-    Route::post('/addresses-create', [
-        AddressController::class,
-        'store',
-    ]);
+        Route::get('/addresses', [
+            AddressController::class,
+            'index',
+        ]);
 
-    Route::get('/addresses/{address}', [
-        AddressController::class,
-        'show',
-    ])->whereNumber('address');
+        Route::post('/addresses', [
+            AddressController::class,
+            'store',
+        ]);
 
-    Route::patch('/addresses/{address}/default', [
-        AddressController::class,
-        'makeDefault',
-    ])->whereNumber('address');
+        Route::post(
+            '/addresses-create',
+            [
+                AddressController::class,
+                'store',
+            ]
+        );
 
-    Route::put('/addresses/{address}', [
-        AddressController::class,
-        'update',
-    ])->whereNumber('address');
+        Route::get(
+            '/addresses/{address}',
+            [
+                AddressController::class,
+                'show',
+            ]
+        )->whereNumber('address');
 
-    Route::patch('/addresses/{address}', [
-        AddressController::class,
-        'update',
-    ])->whereNumber('address');
+        Route::patch(
+            '/addresses/{address}/default',
+            [
+                AddressController::class,
+                'makeDefault',
+            ]
+        )->whereNumber('address');
 
-    Route::delete('/addresses/{address}', [
-        AddressController::class,
-        'destroy',
-    ])->whereNumber('address');
+        Route::put(
+            '/addresses/{address}',
+            [
+                AddressController::class,
+                'update',
+            ]
+        )->whereNumber('address');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Customized flower orders
-    |--------------------------------------------------------------------------
-    */
+        Route::patch(
+            '/addresses/{address}',
+            [
+                AddressController::class,
+                'update',
+            ]
+        )->whereNumber('address');
 
-    Route::post('/custom-orders', [
-        CustomOrderController::class,
-        'store',
-    ]);
+        Route::delete(
+            '/addresses/{address}',
+            [
+                AddressController::class,
+                'destroy',
+            ]
+        )->whereNumber('address');
 
-    Route::get('/my-orders', [
-        CustomOrderController::class,
-        'myOrders',
-    ]);
+        /*
+        |--------------------------------------------------------------------------
+        | Customized flower orders
+        |--------------------------------------------------------------------------
+        */
 
-    /*
-    |--------------------------------------------------------------------------
-    | Event bookings and quotations
-    |--------------------------------------------------------------------------
-    */
+        Route::post(
+            '/custom-orders',
+            [
+                CustomOrderController::class,
+                'store',
+            ]
+        );
 
-    Route::post('/event-bookings', [
-        EventBookingController::class,
-        'store',
-    ]);
+        Route::get('/my-orders', [
+            CustomOrderController::class,
+            'myOrders',
+        ]);
 
-    Route::get('/my-quotations', [
-        EventBookingController::class,
-        'myQuotations',
-    ]);
+        /*
+        |--------------------------------------------------------------------------
+        | Event bookings / quotations
+        |--------------------------------------------------------------------------
+        */
 
-    Route::post('/quotations/{quotation}/accept', [
-        EventBookingController::class,
-        'acceptQuotation',
-    ])->whereNumber('quotation');
+        Route::post(
+            '/event-bookings',
+            [
+                EventBookingController::class,
+                'store',
+            ]
+        );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Subscriptions
-    |--------------------------------------------------------------------------
-    */
+        Route::get(
+            '/my-quotations',
+            [
+                EventBookingController::class,
+                'myQuotations',
+            ]
+        );
 
-    Route::post('/subscriptions', [
-        SubscriptionController::class,
-        'store',
-    ]);
+        Route::post(
+            '/quotations/{quotation}/accept',
+            [
+                EventBookingController::class,
+                'acceptQuotation',
+            ]
+        )->whereNumber('quotation');
 
-    Route::get('/my-subscriptions', [
-        SubscriptionController::class,
-        'mySubscriptions',
-    ]);
+        /*
+        |--------------------------------------------------------------------------
+        | Subscriptions
+        |--------------------------------------------------------------------------
+        */
 
-    /*
-    |--------------------------------------------------------------------------
-    | Payments
-    |--------------------------------------------------------------------------
-    */
+        Route::post('/subscriptions', [
+            SubscriptionController::class,
+            'store',
+        ]);
 
-    Route::post('/payments/create-order', [
-        PaymentController::class,
-        'createOrder',
-    ]);
+        Route::get(
+            '/my-subscriptions',
+            [
+                SubscriptionController::class,
+                'mySubscriptions',
+            ]
+        );
 
-    Route::post('/payments/verify', [
-        PaymentController::class,
-        'verify',
-    ]);
+        /*
+        |--------------------------------------------------------------------------
+        | Payments
+        |--------------------------------------------------------------------------
+        */
 
-    Route::get('/payments/history', [
-        PaymentController::class,
-        'history',
-    ]);
-});
+        Route::post(
+            '/payments/create-order',
+            [
+                PaymentController::class,
+                'createOrder',
+            ]
+        );
+
+        Route::post(
+            '/payments/verify',
+            [
+                PaymentController::class,
+                'verify',
+            ]
+        );
+
+        Route::get(
+            '/payments/history',
+            [
+                PaymentController::class,
+                'history',
+            ]
+        );
+    }
+);
