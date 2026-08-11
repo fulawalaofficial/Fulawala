@@ -47,6 +47,15 @@ Route::get('/flowers', [
 |--------------------------------------------------------------------------
 | Public profile image route
 |--------------------------------------------------------------------------
+|
+| IMPORTANT:
+| Keep this route OUTSIDE auth:sanctum.
+| React Native's <Image> request does not automatically attach your Bearer
+| token, so the image-serving endpoint itself must be public.
+|
+| Example:
+| https://fulawala.com/api/profile-images/user-12-uuid.jpg
+|
 */
 
 Route::get('/profile-images/{filename}', [
@@ -65,9 +74,7 @@ Route::get('/profile-images/{filename}', [
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(
-    'auth:sanctum'
-)->group(
+Route::middleware('auth:sanctum')->group(
     function (): void {
 
         /*
@@ -115,6 +122,7 @@ Route::middleware(
             'deletePhoto',
         ]);
 
+        // Backward-compatible alias used by your current ProfileScreen.
         Route::delete(
             '/profile/photo-delete',
             [

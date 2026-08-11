@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -24,10 +25,12 @@ class ProfileController extends Controller
             return $this->unauthenticatedResponse();
         }
 
+        $freshUser = $user->fresh(['addresses']);
+
         return response()->json([
             'status' => true,
             'message' => 'Profile fetched successfully.',
-            'data' => $user->fresh(['addresses']),
+            'data' => $this->profilePayload($freshUser),
         ]);
     }
 
@@ -43,27 +46,29 @@ class ProfileController extends Controller
         }
 
         $freshUser = $user->fresh();
+        $photoPath = $freshUser?->profile_photo;
 
         return response()->json([
             'status' => true,
-            'message' => $freshUser->profile_photo
+            'message' => $photoPath
                 ? 'Profile photo fetched successfully.'
                 : 'No profile photo is available.',
             'data' => [
-                'profile_photo' => $freshUser->profile_photo,
-                'profile_photo_url' => $freshUser->profile_photo_url,
-                'photo_exists' => $this->photoExists(
-                    $freshUser->profile_photo
-                ),
+                'profile_photo' => $photoPath,
+                'profile_photo_url' => $this->publicPhotoUrl($photoPath),
+                'photo_exists' => $this->photoExists($photoPath),
             ],
         ]);
     }
 
     /**
-     * Public endpoint that displays the profile image.
+     * Public endpoint used by the mobile app to display profile images.
      *
      * Example:
-     * https://fulawala.com/api/profile-images/user-8-uuid.png
+     * https://fulawala.com/api/profile-images/user-12-uuid.jpg
+     *
+     * This route is intentionally PUBLIC because React Native's <Image>
+     * does not automatically send the Sanctum Authorization header.
      */
     public function showPhotoFile(string $filename): BinaryFileResponse
     {
@@ -78,8 +83,8 @@ class ProfileController extends Controller
         }
 
         /*
-         * New storage location:
-         * storage/app/public/profile-photos
+         * Current storage:
+         * storage/app/public/profile-photos/{filename}
          */
         $storagePath = 'profile-photos/' . $safeFilename;
 
@@ -87,14 +92,14 @@ class ProfileController extends Controller
             $absolutePath = Storage::disk('public')->path($storagePath);
 
             return response()->file($absolutePath, [
-                'Cache-Control' => 'public, max-age=86400',
+                'Cache-Control' => 'public, max-age=604800',
                 'X-Content-Type-Options' => 'nosniff',
             ]);
         }
 
         /*
-         * Support photos uploaded by your previous controller:
-         * public/uploads/profile-photos
+         * Backward compatibility:
+         * public/uploads/profile-photos/{filename}
          */
         $oldPublicPath = public_path(
             'uploads/profile-photos/' . $safeFilename
@@ -102,7 +107,7 @@ class ProfileController extends Controller
 
         if (is_file($oldPublicPath)) {
             return response()->file($oldPublicPath, [
-                'Cache-Control' => 'public, max-age=86400',
+                'Cache-Control' => 'public, max-age=604800',
                 'X-Content-Type-Options' => 'nosniff',
             ]);
         }
@@ -175,7 +180,7 @@ class ProfileController extends Controller
             );
 
             /*
-             * Store in:
+             * Save to:
              * storage/app/public/profile-photos
              */
             $newPhotoPath = $uploadedFile->storeAs(
@@ -211,7 +216,7 @@ class ProfileController extends Controller
             return response()->json([
                 'status' => true,
                 'message' => 'Profile photo updated successfully.',
-                'data' => $freshUser,
+                'data' => $this->profilePayload($freshUser),
             ]);
         } catch (Throwable $exception) {
             if (
@@ -257,10 +262,12 @@ class ProfileController extends Controller
         $oldPhotoPath = $user->profile_photo;
 
         if (!$oldPhotoPath) {
+            $freshUser = $user->fresh(['addresses']);
+
             return response()->json([
                 'status' => true,
                 'message' => 'No profile photo is available to delete.',
-                'data' => $user->fresh(['addresses']),
+                'data' => $this->profilePayload($freshUser),
             ]);
         }
 
@@ -271,10 +278,12 @@ class ProfileController extends Controller
 
             $this->deletePhysicalPhoto($oldPhotoPath);
 
+            $freshUser = $user->fresh(['addresses']);
+
             return response()->json([
                 'status' => true,
                 'message' => 'Profile photo deleted successfully.',
-                'data' => $user->fresh(['addresses']),
+                'data' => $this->profilePayload($freshUser),
             ]);
         } catch (Throwable $exception) {
             Log::error('Profile photo deletion failed.', [
@@ -293,6 +302,43 @@ class ProfileController extends Controller
                     : null,
             ], 500);
         }
+    }
+
+    /**
+     * Convert the Eloquent user model to API data and ALWAYS append
+     * a usable public profile_photo_url.
+     *
+     * This avoids requiring a User-model accessor.
+     */
+    private function profilePayload(?Model $user): ?array
+    {
+        if (!$user) {
+            return null;
+        }
+
+        $data = $user->toArray();
+
+        $data['profile_photo_url'] = $this->publicPhotoUrl(
+            $user->getAttribute('profile_photo')
+        );
+
+        return $data;
+    }
+
+    /**
+     * Build the URL for the PUBLIC Laravel image route.
+     */
+    private function publicPhotoUrl(?string $photoPath): ?string
+    {
+        $filename = $this->extractFilename($photoPath);
+
+        if (!$filename) {
+            return null;
+        }
+
+        return route('profile.images.show', [
+            'filename' => $filename,
+        ]);
     }
 
     /**
@@ -320,7 +366,7 @@ class ProfileController extends Controller
     }
 
     /**
-     * Delete both new and previous photo formats.
+     * Delete both current and previous photo formats.
      */
     private function deletePhysicalPhoto(?string $photoPath): void
     {
@@ -353,7 +399,7 @@ class ProfileController extends Controller
     }
 
     /**
-     * Extract safe filename from a path or URL.
+     * Extract a safe filename from a saved path or URL.
      */
     private function extractFilename(?string $photoPath): ?string
     {
