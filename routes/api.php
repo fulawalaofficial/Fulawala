@@ -47,25 +47,13 @@ Route::get('/flowers', [
 |--------------------------------------------------------------------------
 | Public profile image route
 |--------------------------------------------------------------------------
-|
-| IMPORTANT:
-| Keep this route OUTSIDE auth:sanctum.
-| React Native's <Image> request does not automatically attach your Bearer
-| token, so the image-serving endpoint itself must be public.
-|
-| Example:
-| https://fulawala.com/api/profile-images/user-12-uuid.jpg
-|
 */
 
 Route::get('/profile-images/{filename}', [
     ProfileController::class,
     'showPhotoFile',
 ])
-    ->where(
-        'filename',
-        '[A-Za-z0-9._-]+'
-    )
+    ->where('filename', '[A-Za-z0-9._-]+')
     ->name('profile.images.show');
 
 /*
@@ -74,242 +62,148 @@ Route::get('/profile-images/{filename}', [
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth:sanctum')->group(
-    function (): void {
+Route::middleware('auth:sanctum')->group(function (): void {
+    /* Home */
+    Route::get('/home', [
+        HomeController::class,
+        'currentMonthSubscriptions',
+    ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Home
-        |--------------------------------------------------------------------------
-        */
+    Route::get('/home/current-month-subscriptions', [
+        HomeController::class,
+        'currentMonthSubscriptions',
+    ]);
 
-        Route::get('/home', [
-            HomeController::class,
-            'currentMonthSubscriptions',
-        ]);
+    /* Profile */
+    Route::get('/profile', [
+        ProfileController::class,
+        'show',
+    ]);
 
-        Route::get(
-            '/home/current-month-subscriptions',
-            [
-                HomeController::class,
-                'currentMonthSubscriptions',
-            ]
-        );
+    Route::get('/profile/photo', [
+        ProfileController::class,
+        'getPhoto',
+    ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Profile
-        |--------------------------------------------------------------------------
-        */
+    Route::post('/profile/photo', [
+        ProfileController::class,
+        'updatePhoto',
+    ]);
 
-        Route::get('/profile', [
-            ProfileController::class,
-            'show',
-        ]);
+    Route::delete('/profile/photo', [
+        ProfileController::class,
+        'deletePhoto',
+    ]);
 
-        Route::get('/profile/photo', [
-            ProfileController::class,
-            'getPhoto',
-        ]);
+    Route::delete('/profile/photo-delete', [
+        ProfileController::class,
+        'deletePhoto',
+    ]);
 
-        Route::post('/profile/photo', [
-            ProfileController::class,
-            'updatePhoto',
-        ]);
+    /* Authentication / Device */
+    Route::post('/logout', [
+        AuthController::class,
+        'logout',
+    ]);
 
-        Route::delete('/profile/photo', [
-            ProfileController::class,
-            'deletePhoto',
-        ]);
+    Route::post('/device-token', [
+        AuthController::class,
+        'updateDeviceToken',
+    ]);
 
-        // Backward-compatible alias used by your current ProfileScreen.
-        Route::delete(
-            '/profile/photo-delete',
-            [
-                ProfileController::class,
-                'deletePhoto',
-            ]
-        );
+    /* Customer addresses */
+    Route::get('/addresses', [
+        AddressController::class,
+        'index',
+    ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Authentication / Device
-        |--------------------------------------------------------------------------
-        */
+    Route::post('/addresses', [
+        AddressController::class,
+        'store',
+    ]);
 
-        Route::post('/logout', [
-            AuthController::class,
-            'logout',
-        ]);
+    // Compatibility alias for previously released APK builds.
+    Route::post('/addresses-create', [
+        AddressController::class,
+        'store',
+    ]);
 
-        Route::post(
-            '/device-token',
-            [
-                AuthController::class,
-                'updateDeviceToken',
-            ]
-        );
+    Route::get('/addresses/{address}', [
+        AddressController::class,
+        'show',
+    ])->whereNumber('address');
 
-        /*
-        |--------------------------------------------------------------------------
-        | Customer addresses
-        |--------------------------------------------------------------------------
-        */
+    Route::patch('/addresses/{address}/default', [
+        AddressController::class,
+        'makeDefault',
+    ])->whereNumber('address');
 
-        Route::get('/addresses', [
-            AddressController::class,
-            'index',
-        ]);
+    Route::put('/addresses/{address}', [
+        AddressController::class,
+        'update',
+    ])->whereNumber('address');
 
-        Route::post('/addresses', [
-            AddressController::class,
-            'store',
-        ]);
+    Route::patch('/addresses/{address}', [
+        AddressController::class,
+        'update',
+    ])->whereNumber('address');
 
-        Route::post(
-            '/addresses-create',
-            [
-                AddressController::class,
-                'store',
-            ]
-        );
+    Route::delete('/addresses/{address}', [
+        AddressController::class,
+        'destroy',
+    ])->whereNumber('address');
 
-        Route::get(
-            '/addresses/{address}',
-            [
-                AddressController::class,
-                'show',
-            ]
-        )->whereNumber('address');
+    /* Customized flower orders */
+    Route::post('/custom-orders', [
+        CustomOrderController::class,
+        'store',
+    ]);
 
-        Route::patch(
-            '/addresses/{address}/default',
-            [
-                AddressController::class,
-                'makeDefault',
-            ]
-        )->whereNumber('address');
+    Route::get('/my-orders', [
+        CustomOrderController::class,
+        'myOrders',
+    ]);
 
-        Route::put(
-            '/addresses/{address}',
-            [
-                AddressController::class,
-                'update',
-            ]
-        )->whereNumber('address');
+    /* Event bookings / quotations */
+    Route::post('/event-bookings', [
+        EventBookingController::class,
+        'store',
+    ]);
 
-        Route::patch(
-            '/addresses/{address}',
-            [
-                AddressController::class,
-                'update',
-            ]
-        )->whereNumber('address');
+    Route::get('/my-quotations', [
+        EventBookingController::class,
+        'myQuotations',
+    ]);
 
-        Route::delete(
-            '/addresses/{address}',
-            [
-                AddressController::class,
-                'destroy',
-            ]
-        )->whereNumber('address');
+    Route::post('/quotations/{quotation}/accept', [
+        EventBookingController::class,
+        'acceptQuotation',
+    ])->whereNumber('quotation');
 
-        /*
-        |--------------------------------------------------------------------------
-        | Customized flower orders
-        |--------------------------------------------------------------------------
-        */
+    /* Subscriptions */
+    Route::post('/subscriptions', [
+        SubscriptionController::class,
+        'store',
+    ]);
 
-        Route::post(
-            '/custom-orders',
-            [
-                CustomOrderController::class,
-                'store',
-            ]
-        );
+    Route::get('/my-subscriptions', [
+        SubscriptionController::class,
+        'mySubscriptions',
+    ]);
 
-        Route::get('/my-orders', [
-            CustomOrderController::class,
-            'myOrders',
-        ]);
+    /* Payments */
+    Route::post('/payments/create-order', [
+        PaymentController::class,
+        'createOrder',
+    ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Event bookings / quotations
-        |--------------------------------------------------------------------------
-        */
+    Route::post('/payments/verify', [
+        PaymentController::class,
+        'verify',
+    ]);
 
-        Route::post(
-            '/event-bookings',
-            [
-                EventBookingController::class,
-                'store',
-            ]
-        );
-
-        Route::get(
-            '/my-quotations',
-            [
-                EventBookingController::class,
-                'myQuotations',
-            ]
-        );
-
-        Route::post(
-            '/quotations/{quotation}/accept',
-            [
-                EventBookingController::class,
-                'acceptQuotation',
-            ]
-        )->whereNumber('quotation');
-
-        /*
-        |--------------------------------------------------------------------------
-        | Subscriptions
-        |--------------------------------------------------------------------------
-        */
-
-        Route::post('/subscriptions', [
-            SubscriptionController::class,
-            'store',
-        ]);
-
-        Route::get(
-            '/my-subscriptions',
-            [
-                SubscriptionController::class,
-                'mySubscriptions',
-            ]
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Payments
-        |--------------------------------------------------------------------------
-        */
-
-        Route::post(
-            '/payments/create-order',
-            [
-                PaymentController::class,
-                'createOrder',
-            ]
-        );
-
-        Route::post(
-            '/payments/verify',
-            [
-                PaymentController::class,
-                'verify',
-            ]
-        );
-
-        Route::get(
-            '/payments/history',
-            [
-                PaymentController::class,
-                'history',
-            ]
-        );
-    }
-);
+    Route::get('/payments/history', [
+        PaymentController::class,
+        'history',
+    ]);
+});

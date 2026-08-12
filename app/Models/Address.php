@@ -32,17 +32,19 @@ class Address extends Model
         'longitude' => 'float',
     ];
 
+    protected $appends = [
+        'full_address',
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Full printable address used by delivery screens and map fallbacks.
-     */
     public function getFullAddressAttribute(): string
     {
         return collect([
+            $this->number,
             $this->address,
             $this->landmark,
             $this->city,
@@ -50,12 +52,10 @@ class Address extends Model
             $this->pincode,
         ])
             ->filter(fn ($value) => filled($value))
+            ->unique(fn ($value) => mb_strtolower(trim((string) $value)))
             ->implode(', ');
     }
 
-    /**
-     * Determine whether both GPS coordinates are available.
-     */
     public function hasCoordinates(): bool
     {
         return $this->latitude !== null
