@@ -111,7 +111,22 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'updateDeviceToken',
     ]);
 
-    /* Customer addresses */
+    /*
+    |--------------------------------------------------------------------------
+    | Customer addresses
+    |--------------------------------------------------------------------------
+    |
+    | Canonical endpoints:
+    | GET     /api/addresses
+    | POST    /api/addresses
+    | GET     /api/addresses/{id}
+    | PUT     /api/addresses/{id}
+    | PATCH   /api/addresses/{id}
+    | PATCH   /api/addresses/{id}/default
+    | DELETE  /api/addresses/{id}
+    |
+    */
+
     Route::get('/addresses', [
         AddressController::class,
         'index',
@@ -122,7 +137,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'store',
     ]);
 
-    // Compatibility alias for previously released APK builds.
+    /*
+     * Compatibility alias for previously released APK builds.
+     */
     Route::post('/addresses-create', [
         AddressController::class,
         'store',

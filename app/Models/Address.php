@@ -34,6 +34,7 @@ class Address extends Model
 
     protected $appends = [
         'full_address',
+        'has_coordinates',
     ];
 
     public function user(): BelongsTo
@@ -41,6 +42,9 @@ class Address extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * A clean address string for mobile/admin display.
+     */
     public function getFullAddressAttribute(): string
     {
         return collect([
@@ -56,9 +60,27 @@ class Address extends Model
             ->implode(', ');
     }
 
+    /**
+     * True only when a usable GPS pair is stored.
+     */
+    public function getHasCoordinatesAttribute(): bool
+    {
+        return $this->hasCoordinates();
+    }
+
     public function hasCoordinates(): bool
     {
-        return $this->latitude !== null
-            && $this->longitude !== null;
+        if ($this->latitude === null || $this->longitude === null) {
+            return false;
+        }
+
+        /*
+         * 0,0 is commonly sent by a mobile app before GPS is resolved.
+         * Do not treat that placeholder as a delivery location.
+         */
+        return !(
+            (float) $this->latitude === 0.0
+            && (float) $this->longitude === 0.0
+        );
     }
 }

@@ -15,13 +15,20 @@ return new class extends Migration
             return;
         }
 
-        Schema::table('addresses', function (Blueprint $table) use ($hasLatitude, $hasLongitude): void {
+        Schema::table('addresses', function (Blueprint $table) use (
+            $hasLatitude,
+            $hasLongitude
+        ): void {
             if (!$hasLatitude) {
-                $table->decimal('latitude', 10, 7)->nullable();
+                $table->decimal('latitude', 10, 7)
+                    ->nullable()
+                    ->after('landmark');
             }
 
             if (!$hasLongitude) {
-                $table->decimal('longitude', 11, 7)->nullable();
+                $table->decimal('longitude', 10, 7)
+                    ->nullable()
+                    ->after('latitude');
             }
         });
     }
@@ -38,12 +45,10 @@ return new class extends Migration
             $columns[] = 'longitude';
         }
 
-        if ($columns === []) {
-            return;
+        if ($columns !== []) {
+            Schema::table('addresses', function (Blueprint $table) use ($columns): void {
+                $table->dropColumn($columns);
+            });
         }
-
-        Schema::table('addresses', function (Blueprint $table) use ($columns): void {
-            $table->dropColumn($columns);
-        });
     }
 };
