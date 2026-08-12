@@ -81,6 +81,7 @@ class AddressController extends Controller
         $this->normalizeRequestAliases($request);
         $data = $this->validatedData($request, false);
         $data = $this->normalizeCoordinates($data);
+        $data['address_type'] = $this->normalizeAddressType($data['address_type'] ?? 'Home');
 
         try {
             $address = DB::transaction(function () use ($user, $data): Address {
@@ -161,6 +162,10 @@ class AddressController extends Controller
         $this->normalizeRequestAliases($request);
         $data = $this->validatedData($request, true);
         $data = $this->normalizeCoordinates($data);
+
+        if (array_key_exists('address_type', $data)) {
+            $data['address_type'] = $this->normalizeAddressType($data['address_type']);
+        }
 
         try {
             DB::transaction(function () use ($userId, $ownedAddress, $data): void {
@@ -450,6 +455,20 @@ class AddressController extends Controller
         return $data;
     }
 
+    /**
+     * Store one consistent value in the existing varchar address_type column.
+     */
+    private function normalizeAddressType(mixed $value): string
+    {
+        $value = strtolower(trim((string) $value));
+
+        return match ($value) {
+            'office', 'work', 'workplace' => 'Office',
+            'other', 'flat', 'apartment' => 'Other',
+            default => 'Home',
+        };
+    }
+
     private function findOwnedAddress(int $userId, mixed $addressId): ?Address
     {
         return Address::query()
@@ -509,6 +528,11 @@ class AddressController extends Controller
             'sql_state' => $error instanceof QueryException
                 ? $error->errorInfo[0] ?? null
                 : null,
+            'sql_driver_code' => $error instanceof QueryException
+                ? $error->errorInfo[1] ?? null
+                : null,
+            'file' => $error->getFile(),
+            'line' => $error->getLine(),
         ]);
 
         $response = [

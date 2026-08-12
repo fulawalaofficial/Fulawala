@@ -56,7 +56,7 @@ class Address extends Model
             $this->pincode,
         ])
             ->filter(fn ($value) => filled($value))
-            ->unique(fn ($value) => mb_strtolower(trim((string) $value)))
+            ->unique(fn ($value) => strtolower(trim((string) $value)))
             ->implode(', ');
     }
 
@@ -75,8 +75,8 @@ class Address extends Model
         }
 
         /*
-         * 0,0 is commonly sent by a mobile app before GPS is resolved.
-         * Do not treat that placeholder as a delivery location.
+         * 0,0 is commonly sent before GPS is resolved.
+         * Do not treat it as a real delivery point.
          */
         return !(
             (float) $this->latitude === 0.0
