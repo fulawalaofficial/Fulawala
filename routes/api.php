@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Public API routes
+| Public API Routes
 |--------------------------------------------------------------------------
 */
 
@@ -45,7 +45,7 @@ Route::get('/flowers', [
 
 /*
 |--------------------------------------------------------------------------
-| Public profile image route
+| Public Profile Image Route
 |--------------------------------------------------------------------------
 */
 
@@ -58,12 +58,18 @@ Route::get('/profile-images/{filename}', [
 
 /*
 |--------------------------------------------------------------------------
-| Authenticated API routes
+| Authenticated API Routes
 |--------------------------------------------------------------------------
 */
 
 Route::middleware('auth:sanctum')->group(function (): void {
-    /* Home */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Home
+    |--------------------------------------------------------------------------
+    */
+
     Route::get('/home', [
         HomeController::class,
         'currentMonthSubscriptions',
@@ -74,7 +80,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'currentMonthSubscriptions',
     ]);
 
-    /* Profile */
+    /*
+    |--------------------------------------------------------------------------
+    | Profile
+    |--------------------------------------------------------------------------
+    */
+
     Route::get('/profile', [
         ProfileController::class,
         'show',
@@ -95,12 +106,20 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'deletePhoto',
     ]);
 
+    /*
+     * Compatibility route used by the mobile app.
+     */
     Route::delete('/profile/photo-delete', [
         ProfileController::class,
         'deletePhoto',
     ]);
 
-    /* Authentication / Device */
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication / Device
+    |--------------------------------------------------------------------------
+    */
+
     Route::post('/logout', [
         AuthController::class,
         'logout',
@@ -113,12 +132,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     /*
     |--------------------------------------------------------------------------
-    | Customer addresses
+    | Customer Addresses
     |--------------------------------------------------------------------------
     |
-    | Canonical endpoints:
     | GET     /api/addresses
     | POST    /api/addresses
+    | POST    /api/addresses-create      Compatibility alias
     | GET     /api/addresses/{id}
     | PUT     /api/addresses/{id}
     | PATCH   /api/addresses/{id}
@@ -132,13 +151,16 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'index',
     ]);
 
+    /*
+     * Canonical create endpoint.
+     */
     Route::post('/addresses', [
         AddressController::class,
         'store',
     ]);
 
     /*
-     * Compatibility alias for previously released APK builds.
+     * Compatibility create endpoint currently used by ProfileScreen.js.
      */
     Route::post('/addresses-create', [
         AddressController::class,
@@ -150,19 +172,21 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'show',
     ])->whereNumber('address');
 
+    /*
+     * Supports both PUT and PATCH from mobile/Postman.
+     */
+    Route::match(
+        ['put', 'patch'],
+        '/addresses/{address}',
+        [
+            AddressController::class,
+            'update',
+        ],
+    )->whereNumber('address');
+
     Route::patch('/addresses/{address}/default', [
         AddressController::class,
         'makeDefault',
-    ])->whereNumber('address');
-
-    Route::put('/addresses/{address}', [
-        AddressController::class,
-        'update',
-    ])->whereNumber('address');
-
-    Route::patch('/addresses/{address}', [
-        AddressController::class,
-        'update',
     ])->whereNumber('address');
 
     Route::delete('/addresses/{address}', [
@@ -170,7 +194,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'destroy',
     ])->whereNumber('address');
 
-    /* Customized flower orders */
+    /*
+    |--------------------------------------------------------------------------
+    | Customized Flower Orders
+    |--------------------------------------------------------------------------
+    */
+
     Route::post('/custom-orders', [
         CustomOrderController::class,
         'store',
@@ -181,7 +210,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'myOrders',
     ]);
 
-    /* Event bookings / quotations */
+    /*
+    |--------------------------------------------------------------------------
+    | Event Bookings / Quotations
+    |--------------------------------------------------------------------------
+    */
+
     Route::post('/event-bookings', [
         EventBookingController::class,
         'store',
@@ -197,7 +231,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'acceptQuotation',
     ])->whereNumber('quotation');
 
-    /* Subscriptions */
+    /*
+    |--------------------------------------------------------------------------
+    | Subscriptions
+    |--------------------------------------------------------------------------
+    */
+
     Route::post('/subscriptions', [
         SubscriptionController::class,
         'store',
@@ -208,7 +247,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
         'mySubscriptions',
     ]);
 
-    /* Payments */
+    /*
+    |--------------------------------------------------------------------------
+    | Payments
+    |--------------------------------------------------------------------------
+    */
+
     Route::post('/payments/create-order', [
         PaymentController::class,
         'createOrder',
