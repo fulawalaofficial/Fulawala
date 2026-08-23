@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\StaffController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\SubscriptionDeliveryController;
 use App\Http\Controllers\Admin\TodayDeliveryController;
+use App\Http\Controllers\Website\AccountDeletionController;
 use App\Http\Controllers\Website\ContactController;
 use App\Http\Controllers\Website\WebsiteController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +25,7 @@ use Illuminate\Support\Facades\Route;
 | Admin authentication
 |--------------------------------------------------------------------------
 */
+
 Route::redirect('/admin', '/admin/dashboard');
 
 Route::get('/admin/login', [AuthController::class, 'showLogin'])
@@ -48,7 +50,12 @@ Route::prefix('admin')
         Route::resource('flowers', FlowerProductController::class)
             ->except(['show']);
 
-        /* Today delivery operations page. */
+        /*
+        |--------------------------------------------------------------------------
+        | Today delivery operations
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/today-deliveries', [TodayDeliveryController::class, 'index'])
             ->name('today-deliveries.index');
 
@@ -57,7 +64,12 @@ Route::prefix('admin')
             [TodayDeliveryController::class, 'saveCoordinates']
         )->name('today-deliveries.coordinates');
 
-        /* Custom orders. */
+        /*
+        |--------------------------------------------------------------------------
+        | Custom orders
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/custom-orders', [CustomOrderController::class, 'index'])
             ->name('custom-orders.index');
 
@@ -66,7 +78,12 @@ Route::prefix('admin')
             [CustomOrderController::class, 'updateStatus']
         )->name('custom-orders.update-status');
 
-        /* Subscriptions. */
+        /*
+        |--------------------------------------------------------------------------
+        | Subscriptions
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/subscriptions', [SubscriptionController::class, 'index'])
             ->name('subscriptions.index');
 
@@ -76,7 +93,12 @@ Route::prefix('admin')
         Route::post('/subscriptions', [SubscriptionController::class, 'store'])
             ->name('subscriptions.store');
 
-        /* Daily subscription deliveries. */
+        /*
+        |--------------------------------------------------------------------------
+        | Daily subscription deliveries
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/daily-deliveries', [SubscriptionDeliveryController::class, 'index'])
             ->name('daily-deliveries.index');
 
@@ -90,7 +112,12 @@ Route::prefix('admin')
             [SubscriptionDeliveryController::class, 'updateStatus']
         )->name('daily-deliveries.update-status');
 
-        /* Event bookings. */
+        /*
+        |--------------------------------------------------------------------------
+        | Event bookings
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/event-bookings', [EventBookingController::class, 'index'])
             ->name('event-bookings.index');
 
@@ -99,7 +126,12 @@ Route::prefix('admin')
             [EventBookingController::class, 'updateStatus']
         )->name('event-bookings.update-status');
 
-        /* Quotations. */
+        /*
+        |--------------------------------------------------------------------------
+        | Quotations
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/quotations', [QuotationController::class, 'index'])
             ->name('quotations.index');
 
@@ -109,7 +141,12 @@ Route::prefix('admin')
         Route::patch('/quotations/{quotation}', [QuotationController::class, 'update'])
             ->name('quotations.update');
 
-        /* Staff. */
+        /*
+        |--------------------------------------------------------------------------
+        | Staff
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/staff', [StaffController::class, 'index'])
             ->name('staff.index');
 
@@ -122,8 +159,20 @@ Route::prefix('admin')
         Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])
             ->name('staff.destroy');
 
+        /*
+        |--------------------------------------------------------------------------
+        | Payments
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/payments', [PaymentController::class, 'index'])
             ->name('payments.index');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Customers
+        |--------------------------------------------------------------------------
+        */
 
         Route::get('/customers', [CustomerController::class, 'index'])
             ->name('customers.index');
@@ -133,8 +182,20 @@ Route::prefix('admin')
             [CustomerController::class, 'updateStatus']
         )->name('customers.update-status');
 
+        /*
+        |--------------------------------------------------------------------------
+        | Reports
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/reports', [ReportController::class, 'index'])
             ->name('reports.index');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Settings
+        |--------------------------------------------------------------------------
+        */
 
         Route::get('/settings', [SettingController::class, 'index'])
             ->name('settings.index');
@@ -148,18 +209,56 @@ Route::prefix('admin')
 | Public website
 |--------------------------------------------------------------------------
 */
+
 Route::name('website.')->group(function (): void {
-    Route::get('/', [WebsiteController::class, 'home'])->name('home');
-    Route::get('/about', [WebsiteController::class, 'about'])->name('about');
-    Route::get('/flowers', [WebsiteController::class, 'flowers'])->name('flowers');
-    Route::get('/pooja-packets', [WebsiteController::class, 'poojaPackets'])->name('pooja-packets');
-    Route::get('/subscriptions', [WebsiteController::class, 'subscriptions'])->name('subscriptions');
-    Route::get('/event-decoration', [WebsiteController::class, 'events'])->name('events');
-    Route::get('/gallery', [WebsiteController::class, 'gallery'])->name('gallery');
-    Route::get('/contact', [WebsiteController::class, 'contact'])->name('contact');
+    Route::get('/', [WebsiteController::class, 'home'])
+        ->name('home');
+
+    Route::get('/about', [WebsiteController::class, 'about'])
+        ->name('about');
+
+    Route::get('/flowers', [WebsiteController::class, 'flowers'])
+        ->name('flowers');
+
+    Route::get('/pooja-packets', [WebsiteController::class, 'poojaPackets'])
+        ->name('pooja-packets');
+
+    Route::get('/subscriptions', [WebsiteController::class, 'subscriptions'])
+        ->name('subscriptions');
+
+    Route::get('/event-decoration', [WebsiteController::class, 'events'])
+        ->name('events');
+
+    Route::get('/gallery', [WebsiteController::class, 'gallery'])
+        ->name('gallery');
+
+    Route::get('/contact', [WebsiteController::class, 'contact'])
+        ->name('contact');
+
     Route::post('/contact', [ContactController::class, 'store'])
         ->middleware('throttle:5,1')
         ->name('contact.submit');
-    Route::get('/privacy-policy', [WebsiteController::class, 'privacy'])->name('privacy');
-    Route::get('/terms-and-conditions', [WebsiteController::class, 'terms'])->name('terms');
+
+    Route::get('/privacy', [WebsiteController::class, 'privacy'])
+        ->name('privacy');
+
+    Route::get('/terms-and-conditions', [WebsiteController::class, 'terms'])
+        ->name('terms');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public account deletion
+    |--------------------------------------------------------------------------
+    |
+    | This page can be used as the Fulawala account deletion URL
+    | in Google Play Console.
+    |
+    */
+
+    Route::get('/delete-account', [AccountDeletionController::class, 'show'])
+        ->name('account-delete.form');
+
+    Route::delete('/delete-account', [AccountDeletionController::class, 'destroy'])
+        ->middleware('throttle:3,1')
+        ->name('account-delete.destroy');
 });
