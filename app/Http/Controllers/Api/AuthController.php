@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\PasswordResetCodeMail;
 use App\Models\Address;
+use App\Models\PasswordResetOtp;
 use App\Models\User;
 use App\Models\UserDevice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -43,7 +47,11 @@ class AuthController extends Controller
                     'password' => [
                         'required',
                         'string',
-                        'min:6',
+                        'max:128',
+                        Password::min(8)
+                            ->letters()
+                            ->numbers()
+                            ->symbols(),
                         'confirmed',
                     ],
                     'terms_accepted' => [
@@ -285,6 +293,215 @@ class AuthController extends Controller
                 $result['device'],
             'token' =>
                 $result['token'],
+        ]);
+    }
+
+    /**
+     * Send a short-lived password reset code.
+     *
+     * The response is deliberately generic so callers cannot use this
+     * endpoint to discover which email addresses are registered.
+     */
+    public function forgotPassword(
+        Request $request
+    ): JsonResponse {
+        $data = $request->validate([
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+            ],
+        ]);
+
+        $email = strtolower(
+            trim((string) $data['email'])
+        );
+
+        $user = User::query()
+            ->where('email', $email)
+            ->where('role', 'customer')
+            ->first();
+
+        if ($user) {
+            $code = (string) random_int(
+                100000,
+                999999
+            );
+
+            DB::transaction(
+                function () use (
+                    $email,
+                    $code
+                ): void {
+                    PasswordResetOtp::query()
+                        ->where('email', $email)
+                        ->delete();
+
+                    PasswordResetOtp::create([
+                        'email' => $email,
+                        'otp_hash' => Hash::make(
+                            $code
+                        ),
+                        'attempts' => 0,
+                        'expires_at' => now()
+                            ->addMinutes(10),
+                    ]);
+                }
+            );
+
+            Mail::to($user->email)->send(
+                new PasswordResetCodeMail(
+                    code: $code,
+                    expiresInMinutes: 10
+                )
+            );
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' =>
+                'If this email belongs to a customer account, a password reset code has been sent.',
+        ]);
+    }
+
+    /**
+     * Reset the password with the emailed one-time code.
+     */
+    public function resetPassword(
+        Request $request
+    ): JsonResponse {
+        $data = $request->validate([
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+            ],
+            'otp' => [
+                'required',
+                'digits:6',
+            ],
+            'password' => [
+                'required',
+                'string',
+                'max:128',
+                Password::min(8)
+                    ->letters()
+                    ->numbers()
+                    ->symbols(),
+                'confirmed',
+            ],
+        ]);
+
+        $email = strtolower(
+            trim((string) $data['email'])
+        );
+
+        $user = User::query()
+            ->where('email', $email)
+            ->where('role', 'customer')
+            ->first();
+
+        $reset = PasswordResetOtp::query()
+            ->where('email', $email)
+            ->latest('id')
+            ->first();
+
+        $invalidReset =
+            !$user ||
+            !$reset ||
+            $reset->expires_at?->isPast() ||
+            $reset->attempts >= 5;
+
+        if ($invalidReset) {
+            if ($reset) {
+                $reset->delete();
+            }
+
+            throw ValidationException
+                ::withMessages([
+                    'otp' => [
+                        'Invalid or expired reset code. Please request a new code.',
+                    ],
+                ]);
+        }
+
+        if (
+            !Hash::check(
+                (string) $data['otp'],
+                $reset->otp_hash
+            )
+        ) {
+            $reset->increment('attempts');
+
+            if (
+                ((int) $reset->attempts + 1) >= 5
+            ) {
+                $reset->delete();
+            }
+
+            throw ValidationException
+                ::withMessages([
+                    'otp' => [
+                        'Invalid or expired reset code. Please request a new code.',
+                    ],
+                ]);
+        }
+
+        if (
+            Hash::check(
+                $data['password'],
+                $user->password
+            )
+        ) {
+            throw ValidationException
+                ::withMessages([
+                    'password' => [
+                        'Please choose a password different from your current password.',
+                    ],
+                ]);
+        }
+
+        DB::transaction(
+            function () use (
+                $user,
+                $email,
+                $data
+            ): void {
+                $user->forceFill([
+                    'password' => Hash::make(
+                        $data['password']
+                    ),
+                ])->save();
+
+                // Log out every old session after a password reset.
+                $user->tokens()->delete();
+
+                UserDevice::query()
+                    ->where(
+                        'user_id',
+                        $user->id
+                    )
+                    ->update([
+                        'sanctum_token_id' => null,
+                        'fcm_token' => null,
+                        'fcm_token_hash' => null,
+                        'notifications_enabled' => false,
+                        'is_active' => false,
+                        'last_seen_at' => now(),
+                        'logged_out_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                PasswordResetOtp::query()
+                    ->where('email', $email)
+                    ->delete();
+            }
+        );
+
+        return response()->json([
+            'status' => true,
+            'message' =>
+                'Password reset successful. Please sign in with your new password.',
         ]);
     }
 

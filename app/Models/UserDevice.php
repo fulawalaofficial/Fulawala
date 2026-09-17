@@ -30,10 +30,6 @@ class UserDevice extends Model
         'logged_out_at',
     ];
 
-    /*
-     * Do not return sensitive notification and token information
-     * in normal API responses.
-     */
     protected $hidden = [
         'sanctum_token_id',
         'fcm_token',
@@ -56,9 +52,6 @@ class UserDevice extends Model
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Only devices that can receive push notifications.
-     */
     public function scopePushEnabled(Builder $query): Builder
     {
         return $query
