@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\EventBooking;
+use App\Models\EventMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -17,7 +18,7 @@ class EventBookingController extends Controller
         $dateFrom = $request->get('date_from', '');
         $dateTo = $request->get('date_to', '');
 
-        $query = EventBooking::with(['user', 'quotation']);
+        $query = EventBooking::with(['user', 'quotation', 'eventMaster']);
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -30,6 +31,9 @@ class EventBookingController extends Controller
                     ->orWhere('requirement', 'like', "%{$search}%")
                     ->orWhere('special_instructions', 'like', "%{$search}%")
                     ->orWhere('booking_status', 'like', "%{$search}%")
+                    ->orWhereHas('eventMaster', function ($eventQuery) use ($search) {
+                        $eventQuery->where('name', 'like', "%{$search}%");
+                    })
                     ->orWhereHas('user', function ($userQuery) use ($search) {
                         $userQuery->where('name', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%")
@@ -43,7 +47,10 @@ class EventBookingController extends Controller
         }
 
         if ($eventType !== '') {
-            $query->where('event_type', $eventType);
+            $query->where(function ($q) use ($eventType) {
+                $q->where('event_type', $eventType)
+                    ->orWhereHas('eventMaster', fn ($master) => $master->where('name', $eventType));
+            });
         }
 
         if ($dateFrom !== '') {
@@ -82,11 +89,21 @@ class EventBookingController extends Controller
                 ->pluck('booking_status')
         )->unique()->values();
 
-        $eventTypeOptions = EventBooking::whereNotNull('event_type')
-            ->where('event_type', '!=', '')
-            ->distinct()
-            ->orderBy('event_type')
-            ->pluck('event_type');
+        // Master event names appear first, then any legacy event_type values already stored.
+        $eventTypeOptions = EventMaster::query()
+            ->active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('name')
+            ->merge(
+                EventBooking::whereNotNull('event_type')
+                    ->where('event_type', '!=', '')
+                    ->distinct()
+                    ->orderBy('event_type')
+                    ->pluck('event_type')
+            )
+            ->unique()
+            ->values();
 
         $filters = [
             'search' => $search,

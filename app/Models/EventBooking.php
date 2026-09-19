@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class EventBooking extends Model
 {
     protected $fillable = [
         'user_id',
+        'event_master_id',
         'event_type',
         'event_date',
         'event_time',
@@ -24,13 +27,18 @@ class EventBooking extends Model
         'budget' => 'decimal:2',
     ];
 
-    public function user()
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    public function quotation()
+    public function quotation(): HasOne
     {
         return $this->hasOne(Quotation::class, 'booking_id');
+    }
+
+    public function eventMaster(): BelongsTo
+    {
+        return $this->belongsTo(EventMaster::class);
     }
 }

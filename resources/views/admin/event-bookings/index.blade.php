@@ -23,6 +23,13 @@
                 <p class="mt-2 max-w-2xl text-white/90">
                     Manage wedding, birthday, pooja and decoration bookings with customer details, venue, budget, quotation and booking status.
                 </p>
+
+                <a
+                    href="{{ route('admin.event-masters.index') }}"
+                    class="mt-4 inline-flex items-center rounded-2xl bg-white px-5 py-3 text-sm font-black text-orange-700 shadow-lg"
+                >
+                    🎊 Manage Event Master
+                </a>
             </div>
 
             <div class="grid grid-cols-2 gap-3 text-center">
@@ -250,7 +257,7 @@
 
                         <div class="md:col-span-2">
                             <p class="text-xs font-black uppercase tracking-wide text-gray-400">Event Type</p>
-                            <p class="mt-1 font-black text-gray-900">{{ $b->event_type ?: '-' }}</p>
+                            <p class="mt-1 font-black text-gray-900">{{ optional($b->eventMaster)->name ?? ($b->event_type ?: '-') }}</p>
                             <p class="text-xs text-gray-500">{{ $eventDate }} · {{ $eventTime }}</p>
                         </div>
 
@@ -304,7 +311,7 @@
                                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <div class="rounded-2xl bg-orange-50 p-4">
                                         <p class="text-xs font-black uppercase text-orange-600">Event Type</p>
-                                        <p class="mt-1 font-black text-gray-900">{{ $b->event_type ?: '-' }}</p>
+                                        <p class="mt-1 font-black text-gray-900">{{ optional($b->eventMaster)->name ?? ($b->event_type ?: '-') }}</p>
                                     </div>
 
                                     <div class="rounded-2xl bg-orange-50 p-4">
