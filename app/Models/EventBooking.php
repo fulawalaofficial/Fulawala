@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class EventBooking extends Model
 {
@@ -37,7 +38,7 @@ class EventBooking extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function quotation()
+    public function quotation(): HasOne
     {
         return $this->hasOne(Quotation::class, 'booking_id');
     }
