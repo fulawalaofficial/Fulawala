@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Payment extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'user_id',
         'payment_type',
@@ -18,15 +21,11 @@ class Payment extends Model
     ];
 
     protected $casts = [
-        'user_id' => 'integer',
-        'reference_id' => 'integer',
         'amount' => 'decimal:2',
     ];
 
     public function user()
     {
-        return $this->belongsTo(
-            User::class
-        );
+        return $this->belongsTo(User::class);
     }
 }

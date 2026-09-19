@@ -9,10 +9,15 @@ use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PoojaPacketController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
-/* Public authentication routes with brute-force protection. */
+/*
+|--------------------------------------------------------------------------
+| Public authentication routes
+|--------------------------------------------------------------------------
+*/
 Route::post('/register', [AuthController::class, 'register'])
     ->middleware('throttle:3,1');
 
@@ -25,6 +30,16 @@ Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])
     ->middleware('throttle:5,1');
 
+/*
+|--------------------------------------------------------------------------
+| Razorpay webhook
+|--------------------------------------------------------------------------
+| Must remain public because Razorpay servers call this URL.
+| Signature validation is performed inside RazorpayWebhookController.
+*/
+Route::post('/razorpay/webhook', [RazorpayWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1');
+
 Route::get('/flower-package', [PoojaPacketController::class, 'index']);
 
 Route::get('/pooja-packets/{poojaPacket}', [PoojaPacketController::class, 'show'])
@@ -36,9 +51,17 @@ Route::get('/profile-images/{filename}', [ProfileController::class, 'showPhotoFi
     ->where('filename', '[A-Za-z0-9._-]+')
     ->name('profile.images.show');
 
+/*
+|--------------------------------------------------------------------------
+| Authenticated application routes
+|--------------------------------------------------------------------------
+*/
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/home', [HomeController::class, 'currentMonthSubscriptions']);
-    Route::get('/home/current-month-subscriptions', [HomeController::class, 'currentMonthSubscriptions']);
+    Route::get(
+        '/home/current-month-subscriptions',
+        [HomeController::class, 'currentMonthSubscriptions']
+    );
 
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::get('/profile/photo', [ProfileController::class, 'getPhoto']);
@@ -54,10 +77,15 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/addresses-create', [AddressController::class, 'store']);
     Route::get('/addresses/{address}', [AddressController::class, 'show'])
         ->whereNumber('address');
-    Route::match(['put', 'patch'], '/addresses/{address}', [AddressController::class, 'update'])
-        ->whereNumber('address');
-    Route::patch('/addresses/{address}/default', [AddressController::class, 'makeDefault'])
-        ->whereNumber('address');
+    Route::match(
+        ['put', 'patch'],
+        '/addresses/{address}',
+        [AddressController::class, 'update']
+    )->whereNumber('address');
+    Route::patch(
+        '/addresses/{address}/default',
+        [AddressController::class, 'makeDefault']
+    )->whereNumber('address');
     Route::delete('/addresses/{address}', [AddressController::class, 'destroy'])
         ->whereNumber('address');
 
@@ -66,8 +94,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::post('/event-bookings', [EventBookingController::class, 'store']);
     Route::get('/my-quotations', [EventBookingController::class, 'myQuotations']);
-    Route::post('/quotations/{quotation}/accept', [EventBookingController::class, 'acceptQuotation'])
-        ->whereNumber('quotation');
+    Route::post(
+        '/quotations/{quotation}/accept',
+        [EventBookingController::class, 'acceptQuotation']
+    )->whereNumber('quotation');
 
     Route::post('/subscriptions', [SubscriptionController::class, 'store']);
     Route::get('/my-subscriptions', [SubscriptionController::class, 'mySubscriptions']);

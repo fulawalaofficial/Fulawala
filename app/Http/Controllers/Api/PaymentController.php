@@ -18,10 +18,11 @@ use Throwable;
 class PaymentController extends Controller
 {
     /**
-     * Create Razorpay order for a custom order or subscription.
+     * Generic order creation endpoint.
      *
-     * Do not accept the payable amount from the application.
-     * The amount is read from the database.
+     * SubscriptionController already creates the Razorpay order for the
+     * subscription screen. Keep this endpoint for other payment flows
+     * such as custom orders.
      */
     public function createOrder(
         Request $request,
@@ -31,12 +32,8 @@ class PaymentController extends Controller
             'payment_type' => [
                 'required',
                 'string',
-                Rule::in([
-                    'custom_order',
-                    'subscription',
-                ]),
+                Rule::in(['custom_order', 'subscription']),
             ],
-
             'reference_id' => [
                 'required',
                 'integer',
@@ -46,35 +43,17 @@ class PaymentController extends Controller
 
         $user = $request->user();
 
-        /*
-         * Read the amount from the related database record.
-         */
         $payable = $this->resolvePayable(
             $user->id,
             $data['payment_type'],
             $data['reference_id']
         );
 
-        /*
-         * Prevent duplicate Razorpay orders when the user
-         * presses the payment button repeatedly.
-         */
-        $existingPayment = Payment::where(
-            'user_id',
-            $user->id
-        )
-            ->where(
-                'payment_type',
-                $data['payment_type']
-            )
-            ->where(
-                'reference_id',
-                $data['reference_id']
-            )
-            ->where(
-                'payment_status',
-                'Pending'
-            )
+        $existingPayment = Payment::query()
+            ->where('user_id', $user->id)
+            ->where('payment_type', $data['payment_type'])
+            ->where('reference_id', $data['reference_id'])
+            ->where('payment_status', 'Pending')
             ->whereNotNull('razorpay_order_id')
             ->latest()
             ->first();
@@ -82,7 +61,7 @@ class PaymentController extends Controller
         if (
             $existingPayment &&
             round((float) $existingPayment->amount, 2) ===
-            round((float) $payable['amount'], 2)
+                round((float) $payable['amount'], 2)
         ) {
             return response()->json(
                 $this->buildCheckoutResponse(
@@ -96,9 +75,7 @@ class PaymentController extends Controller
         }
 
         try {
-            $prefix = $data['payment_type'] === 'custom_order'
-                ? 'co'
-                : 'sub';
+            $prefix = $data['payment_type'] === 'custom_order' ? 'co' : 'sub';
 
             $receipt = $prefix . '_' .
                 $data['reference_id'] . '_' .
@@ -111,8 +88,7 @@ class PaymentController extends Controller
                 [
                     'user_id' => (string) $user->id,
                     'payment_type' => $data['payment_type'],
-                    'reference_id' =>
-                        (string) $data['reference_id'],
+                    'reference_id' => (string) $data['reference_id'],
                 ]
             );
 
@@ -121,9 +97,7 @@ class PaymentController extends Controller
                 'payment_type' => $data['payment_type'],
                 'reference_id' => $data['reference_id'],
                 'amount' => $payable['amount'],
-                'razorpay_order_id' =>
-                    $razorpayOrder['id'],
-
+                'razorpay_order_id' => $razorpayOrder['id'],
                 'razorpay_payment_id' => null,
                 'razorpay_signature' => null,
                 'payment_status' => 'Pending',
@@ -132,57 +106,24 @@ class PaymentController extends Controller
             return response()->json([
                 'status' => true,
                 'message' => 'Razorpay order created successfully.',
-
-                /*
-                 * Local payments-table ID.
-                 */
                 'payment_id' => $payment->id,
-
-                /*
-                 * Razorpay order ID.
-                 */
-                'razorpay_order_id' =>
-                    $razorpayOrder['id'],
-
-                'order_id' =>
-                    $razorpayOrder['id'],
-
-                /*
-                 * Razorpay amount is in paise.
-                 */
-                'amount' =>
-                    (int) $razorpayOrder['amount'],
-
-                'amount_rupees' =>
-                    $payment->amount,
-
-                'currency' =>
-                    $razorpayOrder['currency'],
-
-                /*
-                 * Only the public key ID is returned.
-                 */
-                'key_id' =>
-                    $razorpay->getKeyId(),
-
-                'name' =>
-                    config('app.name', 'Fulawala'),
-
-                'description' =>
-                    $payable['description'],
-
+                'razorpay_order_id' => $razorpayOrder['id'],
+                'order_id' => $razorpayOrder['id'],
+                'amount' => (int) $razorpayOrder['amount'],
+                'amount_in_paise' => (int) $razorpayOrder['amount'],
+                'amount_rupees' => $payment->amount,
+                'currency' => $razorpayOrder['currency'],
+                'key_id' => $razorpay->getKeyId(),
+                'name' => config('app.name', 'Fulawala'),
+                'description' => $payable['description'],
                 'prefill' => [
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'contact' => $user->mobile,
+                    'name' => $user->name ?? '',
+                    'email' => $user->email ?? '',
+                    'contact' => $user->mobile ?? '',
                 ],
-
                 'notes' => [
-                    'payment_type' =>
-                        $data['payment_type'],
-
-                    'reference_id' =>
-                        (string) $data['reference_id'],
+                    'payment_type' => $data['payment_type'],
+                    'reference_id' => (string) $data['reference_id'],
                 ],
             ], 201);
         } catch (Throwable $e) {
@@ -191,42 +132,31 @@ class PaymentController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Unable to create Razorpay order.',
-                'error' => config('app.debug')
-                    ? $e->getMessage()
-                    : null,
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 422);
         }
     }
 
-    /**
-     * Verify Razorpay payment and update the related record.
-     */
     public function verify(
         Request $request,
         RazorpayService $razorpay
     ) {
         $data = $request->validate([
-            /*
-             * Local ID from payments table.
-             */
             'payment_id' => [
                 'required',
                 'integer',
                 'exists:payments,id',
             ],
-
             'razorpay_payment_id' => [
                 'required',
                 'string',
                 'max:100',
             ],
-
             'razorpay_order_id' => [
                 'required',
                 'string',
                 'max:100',
             ],
-
             'razorpay_signature' => [
                 'required',
                 'string',
@@ -234,27 +164,10 @@ class PaymentController extends Controller
             ],
         ]);
 
-        $payment = Payment::where(
-            'id',
-            $data['payment_id']
-        )
-            ->where(
-                'user_id',
-                $request->user()->id
-            )
+        $payment = Payment::query()
+            ->whereKey($data['payment_id'])
+            ->where('user_id', $request->user()->id)
             ->firstOrFail();
-
-        /*
-         * Return success if this request has already
-         * been verified.
-         */
-        if ($payment->payment_status === 'Paid') {
-            return response()->json([
-                'status' => true,
-                'message' => 'Payment already verified.',
-                'payment' => $payment,
-            ]);
-        }
 
         if (!$payment->razorpay_order_id) {
             return response()->json([
@@ -263,10 +176,6 @@ class PaymentController extends Controller
             ], 422);
         }
 
-        /*
-         * Compare the returned order ID with the order ID
-         * stored by the server.
-         */
         if (
             !hash_equals(
                 (string) $payment->razorpay_order_id,
@@ -280,13 +189,38 @@ class PaymentController extends Controller
         }
 
         /*
-         * Prevent the same Razorpay payment from being
-         * applied to more than one local payment record.
+         * A trusted webhook can mark a payment Paid before the mobile
+         * verification request arrives. In that case, still ensure the
+         * incoming payment ID matches the stored one when it is available.
          */
-        $duplicatePayment = Payment::where(
-            'razorpay_payment_id',
-            $data['razorpay_payment_id']
-        )
+        if ($payment->payment_status === 'Paid') {
+            if (
+                $payment->razorpay_payment_id &&
+                !hash_equals(
+                    (string) $payment->razorpay_payment_id,
+                    (string) $data['razorpay_payment_id']
+                )
+            ) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Payment ID does not match the verified payment.',
+                ], 422);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Payment already verified.',
+                'payment' => $payment,
+                'subscription' =>
+                    $payment->payment_type === 'subscription'
+                        ? Subscription::with(['packet', 'address'])
+                            ->find($payment->reference_id)
+                        : null,
+            ]);
+        }
+
+        $duplicatePayment = Payment::query()
+            ->where('razorpay_payment_id', $data['razorpay_payment_id'])
             ->where('id', '!=', $payment->id)
             ->exists();
 
@@ -298,51 +232,31 @@ class PaymentController extends Controller
         }
 
         try {
-            /*
-             * Verify Razorpay Checkout signature using the
-             * server-stored Razorpay order ID.
-             */
             $razorpay->verifySignature(
-                $payment->razorpay_order_id,
+                (string) $payment->razorpay_order_id,
                 $data['razorpay_payment_id'],
                 $data['razorpay_signature']
             );
 
-            /*
-             * Fetch payment and capture it when its status
-             * is still authorized.
-             */
-            $razorpayPayment = $razorpay
-                ->capturePaymentIfNeeded(
-                    $data['razorpay_payment_id'],
-                    $razorpay->amountToPaise(
-                        $payment->amount
-                    )
-                );
+            $expectedAmount = $razorpay->amountToPaise($payment->amount);
 
-            $razorpayStatus =
-                $razorpayPayment['status'] ?? null;
-
-            $razorpayOrderId =
-                $razorpayPayment['order_id'] ?? null;
-
-            $razorpayAmount = (int) (
-                $razorpayPayment['amount'] ?? 0
+            $razorpayPayment = $razorpay->capturePaymentIfNeeded(
+                $data['razorpay_payment_id'],
+                $expectedAmount
             );
 
-            $razorpayCurrency =
-                $razorpayPayment['currency'] ?? null;
-
-            $expectedAmount = $razorpay->amountToPaise(
-                $payment->amount
+            $razorpayStatus = (string) ($razorpayPayment['status'] ?? '');
+            $razorpayOrderId = (string) ($razorpayPayment['order_id'] ?? '');
+            $razorpayAmount = (int) ($razorpayPayment['amount'] ?? 0);
+            $razorpayCurrency = strtoupper(
+                (string) ($razorpayPayment['currency'] ?? '')
             );
 
-            /*
-             * Confirm payment belongs to this order.
-             */
             if (
-                $razorpayOrderId !==
-                $payment->razorpay_order_id
+                !hash_equals(
+                    (string) $payment->razorpay_order_id,
+                    $razorpayOrderId
+                )
             ) {
                 return response()->json([
                     'status' => false,
@@ -350,10 +264,6 @@ class PaymentController extends Controller
                 ], 422);
             }
 
-            /*
-             * Confirm the actual Razorpay amount matches
-             * the amount stored in our database.
-             */
             if ($razorpayAmount !== $expectedAmount) {
                 return response()->json([
                     'status' => false,
@@ -363,10 +273,7 @@ class PaymentController extends Controller
                 ], 422);
             }
 
-            if (
-                strtoupper((string) $razorpayCurrency) !==
-                $razorpay->getCurrency()
-            ) {
+            if ($razorpayCurrency !== $razorpay->getCurrency()) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Invalid Razorpay payment currency.',
@@ -377,102 +284,28 @@ class PaymentController extends Controller
                 return response()->json([
                     'status' => false,
                     'message' => 'Payment is not captured yet.',
-                    'razorpay_status' =>
-                        $razorpayStatus,
+                    'razorpay_status' => $razorpayStatus,
                 ], 422);
             }
 
-            DB::transaction(function () use (
-                $payment,
-                $data
-            ) {
-                /*
-                 * Lock payment row to prevent duplicate
-                 * verification requests.
-                 */
-                $lockedPayment = Payment::where(
-                    'id',
-                    $payment->id
-                )
+            DB::transaction(function () use ($payment, $data) {
+                $lockedPayment = Payment::query()
+                    ->whereKey($payment->id)
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                if (
-                    $lockedPayment->payment_status ===
-                    'Paid'
-                ) {
+                if ($lockedPayment->payment_status === 'Paid') {
                     return;
                 }
 
                 $lockedPayment->update([
-                    'razorpay_payment_id' =>
-                        $data['razorpay_payment_id'],
-
-                    'razorpay_order_id' =>
-                        $data['razorpay_order_id'],
-
-                    'razorpay_signature' =>
-                        $data['razorpay_signature'],
-
+                    'razorpay_payment_id' => $data['razorpay_payment_id'],
+                    'razorpay_order_id' => $data['razorpay_order_id'],
+                    'razorpay_signature' => $data['razorpay_signature'],
                     'payment_status' => 'Paid',
                 ]);
 
-                /*
-                 * Update custom order after payment.
-                 */
-                if (
-                    $lockedPayment->payment_type ===
-                    'custom_order' &&
-                    $lockedPayment->reference_id
-                ) {
-                    $updated = CustomOrder::where(
-                        'id',
-                        $lockedPayment->reference_id
-                    )
-                        ->where(
-                            'user_id',
-                            $lockedPayment->user_id
-                        )
-                        ->update([
-                            'payment_status' => 'Paid',
-                            'order_status' => 'Order Placed',
-                        ]);
-
-                    if (!$updated) {
-                        throw new RuntimeException(
-                            'Custom order could not be updated.'
-                        );
-                    }
-                }
-
-                /*
-                 * Update subscription after payment.
-                 */
-                if (
-                    $lockedPayment->payment_type ===
-                    'subscription' &&
-                    $lockedPayment->reference_id
-                ) {
-                    $updated = Subscription::where(
-                        'id',
-                        $lockedPayment->reference_id
-                    )
-                        ->where(
-                            'user_id',
-                            $lockedPayment->user_id
-                        )
-                        ->update([
-                            'payment_status' => 'Paid',
-                            'subscription_status' =>
-                                'Active',
-                        ]);
-
-                    if (!$updated) {
-                        throw new RuntimeException(
-                            'Subscription could not be updated.'
-                        );
-                    }
-                }
+                $this->activateRelatedRecord($lockedPayment);
             });
 
             $freshPayment = $payment->fresh();
@@ -481,25 +314,15 @@ class PaymentController extends Controller
                 'status' => true,
                 'message' => 'Payment verified successfully.',
                 'payment' => $freshPayment,
-
                 'custom_order' =>
-                    $freshPayment->payment_type ===
-                    'custom_order'
-                        ? CustomOrder::with([
-                            'items.flower',
-                            'address',
-                        ])->find(
-                            $freshPayment->reference_id
-                        )
+                    $freshPayment->payment_type === 'custom_order'
+                        ? CustomOrder::with(['items.flower', 'address'])
+                            ->find($freshPayment->reference_id)
                         : null,
-
                 'subscription' =>
-                    $freshPayment->payment_type ===
-                    'subscription'
-                        ? Subscription::with('packet')
-                            ->find(
-                                $freshPayment->reference_id
-                            )
+                    $freshPayment->payment_type === 'subscription'
+                        ? Subscription::with(['packet', 'address'])
+                            ->find($freshPayment->reference_id)
                         : null,
             ]);
         } catch (Throwable $e) {
@@ -508,42 +331,71 @@ class PaymentController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Payment verification failed.',
-                'error' => config('app.debug')
-                    ? $e->getMessage()
-                    : null,
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 422);
         }
     }
 
-    /**
-     * Return logged-in user's payment history.
-     */
     public function history(Request $request)
     {
-        $payments = $request->user()
-            ->payments()
-            ->latest()
-            ->get();
-
         return response()->json([
             'status' => true,
-            'data' => $payments,
+            'data' => $request->user()
+                ->payments()
+                ->latest()
+                ->get(),
         ]);
     }
 
-    /**
-     * Find payable record and return its server-side amount.
-     */
+    private function activateRelatedRecord(Payment $payment): void
+    {
+        if (
+            $payment->payment_type === 'custom_order' &&
+            $payment->reference_id
+        ) {
+            $updated = CustomOrder::query()
+                ->whereKey($payment->reference_id)
+                ->where('user_id', $payment->user_id)
+                ->update([
+                    'payment_status' => 'Paid',
+                    'order_status' => 'Order Placed',
+                ]);
+
+            if (!$updated) {
+                throw new RuntimeException(
+                    'Custom order could not be updated.'
+                );
+            }
+        }
+
+        if (
+            $payment->payment_type === 'subscription' &&
+            $payment->reference_id
+        ) {
+            $updated = Subscription::query()
+                ->whereKey($payment->reference_id)
+                ->where('user_id', $payment->user_id)
+                ->update([
+                    'payment_status' => 'Paid',
+                    'subscription_status' => 'Active',
+                ]);
+
+            if (!$updated) {
+                throw new RuntimeException(
+                    'Subscription could not be updated.'
+                );
+            }
+        }
+    }
+
     private function resolvePayable(
         int $userId,
         string $paymentType,
         int $referenceId
     ): array {
         if ($paymentType === 'custom_order') {
-            $order = CustomOrder::where(
-                'id',
-                $referenceId
-            )
+            $order = CustomOrder::query()
+                ->whereKey($referenceId)
                 ->where('user_id', $userId)
                 ->firstOrFail();
 
@@ -565,23 +417,17 @@ class PaymentController extends Controller
 
             return [
                 'amount' => $order->total_amount,
-                'description' =>
-                    'Custom flower order payment',
+                'description' => 'Custom flower order payment',
             ];
         }
 
         if ($paymentType === 'subscription') {
-            $subscription = Subscription::where(
-                'id',
-                $referenceId
-            )
+            $subscription = Subscription::query()
+                ->whereKey($referenceId)
                 ->where('user_id', $userId)
                 ->firstOrFail();
 
-            if (
-                $subscription->payment_status ===
-                'Paid'
-            ) {
+            if ($subscription->payment_status === 'Paid') {
                 throw ValidationException::withMessages([
                     'reference_id' => [
                         'This subscription is already paid.',
@@ -599,22 +445,15 @@ class PaymentController extends Controller
 
             return [
                 'amount' => $subscription->amount,
-                'description' =>
-                    'Flower subscription payment',
+                'description' => 'Flower subscription payment',
             ];
         }
 
         throw ValidationException::withMessages([
-            'payment_type' => [
-                'Unsupported payment type.',
-            ],
+            'payment_type' => ['Unsupported payment type.'],
         ]);
     }
 
-    /**
-     * Build Razorpay Checkout response for an existing
-     * pending payment.
-     */
     private function buildCheckoutResponse(
         Payment $payment,
         RazorpayService $razorpay,
@@ -622,41 +461,25 @@ class PaymentController extends Controller
         $user,
         string $message
     ): array {
+        $amountInPaise = $razorpay->amountToPaise($payment->amount);
+
         return [
             'status' => true,
             'message' => $message,
             'payment_id' => $payment->id,
-
-            'razorpay_order_id' =>
-                $payment->razorpay_order_id,
-
-            'order_id' =>
-                $payment->razorpay_order_id,
-
-            'amount' =>
-                $razorpay->amountToPaise(
-                    $payment->amount
-                ),
-
-            'amount_rupees' =>
-                $payment->amount,
-
-            'currency' =>
-                $razorpay->getCurrency(),
-
-            'key_id' =>
-                $razorpay->getKeyId(),
-
-            'name' =>
-                config('app.name', 'Fulawala'),
-
-            'description' =>
-                $description,
-
+            'razorpay_order_id' => $payment->razorpay_order_id,
+            'order_id' => $payment->razorpay_order_id,
+            'amount' => $amountInPaise,
+            'amount_in_paise' => $amountInPaise,
+            'amount_rupees' => $payment->amount,
+            'currency' => $razorpay->getCurrency(),
+            'key_id' => $razorpay->getKeyId(),
+            'name' => config('app.name', 'Fulawala'),
+            'description' => $description,
             'prefill' => [
-                'name' => $user->name,
-                'email' => $user->email,
-                'contact' => $user->mobile,
+                'name' => $user->name ?? '',
+                'email' => $user->email ?? '',
+                'contact' => $user->mobile ?? '',
             ],
         ];
     }
