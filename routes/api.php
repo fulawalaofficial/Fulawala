@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\PoojaPacketController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\EventMasterController;
+
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -106,3 +108,26 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/payments/verify', [PaymentController::class, 'verify']);
     Route::get('/payments/history', [PaymentController::class, 'history']);
 });
+
+
+
+Route::middleware('auth:sanctum')->group(function (): void {
+    // Event Master catalog
+    Route::get('/event-masters', [EventMasterController::class, 'index']);
+    Route::get('/event-masters/{eventMaster}', [EventMasterController::class, 'show']);
+
+    // User addresses used by Event Booking
+    Route::get('/addresses', [AddressController::class, 'index']);
+    Route::post('/addresses', [AddressController::class, 'store']);
+
+    // Event Booking
+    Route::post('/event-bookings', [EventBookingController::class, 'store']);
+
+    // Existing quotation flow
+    Route::get('/my-quotations', [EventBookingController::class, 'myQuotations']);
+    Route::post(
+        '/quotations/{quotation}/accept',
+        [EventBookingController::class, 'acceptQuotation']
+    );
+});
+

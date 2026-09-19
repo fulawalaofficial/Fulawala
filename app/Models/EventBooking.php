@@ -4,13 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class EventBooking extends Model
 {
     protected $fillable = [
         'user_id',
         'event_master_id',
+        'event_plan_id',
+        'address_id',
         'event_type',
         'event_date',
         'event_time',
@@ -23,6 +24,10 @@ class EventBooking extends Model
     ];
 
     protected $casts = [
+        'user_id' => 'integer',
+        'event_master_id' => 'integer',
+        'event_plan_id' => 'integer',
+        'address_id' => 'integer',
         'event_date' => 'date',
         'budget' => 'decimal:2',
     ];
@@ -32,7 +37,7 @@ class EventBooking extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function quotation(): HasOne
+    public function quotation()
     {
         return $this->hasOne(Quotation::class, 'booking_id');
     }
@@ -40,5 +45,15 @@ class EventBooking extends Model
     public function eventMaster(): BelongsTo
     {
         return $this->belongsTo(EventMaster::class);
+    }
+
+    public function eventPlan(): BelongsTo
+    {
+        return $this->belongsTo(EventPlan::class);
+    }
+
+    public function address(): BelongsTo
+    {
+        return $this->belongsTo(Address::class);
     }
 }

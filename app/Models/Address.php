@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Address extends Model
 {
@@ -42,13 +43,14 @@ class Address extends Model
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * A clean address string for mobile/admin display.
-     */
+    public function eventBookings(): HasMany
+    {
+        return $this->hasMany(EventBooking::class);
+    }
+
     public function getFullAddressAttribute(): string
     {
         return collect([
-            $this->number,
             $this->address,
             $this->landmark,
             $this->city,
@@ -60,9 +62,6 @@ class Address extends Model
             ->implode(', ');
     }
 
-    /**
-     * True only when a usable GPS pair is stored.
-     */
     public function getHasCoordinatesAttribute(): bool
     {
         return $this->hasCoordinates();
@@ -74,10 +73,6 @@ class Address extends Model
             return false;
         }
 
-        /*
-         * 0,0 is commonly sent before GPS is resolved.
-         * Do not treat it as a real delivery point.
-         */
         return !(
             (float) $this->latitude === 0.0
             && (float) $this->longitude === 0.0
