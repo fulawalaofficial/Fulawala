@@ -24,8 +24,14 @@ class RazorpayService
         }
 
         $this->keyId = $keyId;
-        $this->currency = $currency !== '' ? strtoupper($currency) : 'INR';
-        $this->api = new Api($keyId, $keySecret);
+        $this->currency = $currency !== ''
+            ? strtoupper($currency)
+            : 'INR';
+
+        $this->api = new Api(
+            $keyId,
+            $keySecret
+        );
     }
 
     public function getKeyId(): string
@@ -38,8 +44,9 @@ class RazorpayService
         return $this->currency;
     }
 
-    public function amountToPaise(float|int|string $amount): int
-    {
+    public function amountToPaise(
+        float|int|string $amount
+    ): int {
         $numericAmount = (float) $amount;
 
         if ($numericAmount <= 0) {
@@ -48,7 +55,9 @@ class RazorpayService
             );
         }
 
-        return (int) round($numericAmount * 100);
+        return (int) round(
+            $numericAmount * 100
+        );
     }
 
     public function createOrder(
@@ -74,6 +83,13 @@ class RazorpayService
             'receipt' => $receipt,
             'amount' => $this->amountToPaise($amount),
             'currency' => $this->currency,
+
+            /*
+             * If your Razorpay account uses automatic capture,
+             * this ensures the order is created for capture.
+             */
+            'payment_capture' => 1,
+
             'notes' => $formattedNotes,
         ]);
 
@@ -99,18 +115,32 @@ class RazorpayService
         string $signature,
         string $secret
     ): bool {
-        if ($rawBody === '' || $signature === '' || $secret === '') {
+        if (
+            $rawBody === ''
+            || $signature === ''
+            || $secret === ''
+        ) {
             return false;
         }
 
-        $expected = hash_hmac('sha256', $rawBody, $secret);
+        $expected = hash_hmac(
+            'sha256',
+            $rawBody,
+            $secret
+        );
 
-        return hash_equals($expected, $signature);
+        return hash_equals(
+            $expected,
+            $signature
+        );
     }
 
-    public function fetchPayment(string $paymentId): array
-    {
-        $payment = $this->api->payment->fetch($paymentId);
+    public function fetchPayment(
+        string $paymentId
+    ): array {
+        $payment = $this->api
+            ->payment
+            ->fetch($paymentId);
 
         return $payment->toArray();
     }
@@ -125,8 +155,12 @@ class RazorpayService
             );
         }
 
-        $payment = $this->api->payment->fetch($paymentId);
+        $payment = $this->api
+            ->payment
+            ->fetch($paymentId);
+
         $paymentData = $payment->toArray();
+
         $status = $paymentData['status'] ?? null;
 
         if ($status === 'captured') {

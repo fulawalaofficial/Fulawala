@@ -17,10 +17,7 @@ use Illuminate\Validation\ValidationException;
 class EventBookingController extends Controller
 {
     /**
-     * Create an event booking from a selected Event Master + saved address.
-     *
-     * event_type and venue_address are stored as snapshots so the admin
-     * booking page keeps working even if the master event/address changes later.
+     * Create event booking from Event Master + Event Plan + saved address.
      */
     public function store(Request $request): JsonResponse
     {
@@ -36,7 +33,7 @@ class EventBookingController extends Controller
             'special_instructions' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        $userId = $request->user()->id;
+        $userId = (int) $request->user()->id;
 
         $eventMaster = EventMaster::query()
             ->whereKey($data['event_master_id'])
@@ -71,8 +68,8 @@ class EventBookingController extends Controller
         }
 
         $budget = array_key_exists('budget', $data) && $data['budget'] !== null
-            ? $data['budget']
-            : ($eventPlan?->price ?? $eventMaster->starting_price);
+            ? (float) $data['budget']
+            : (float) ($eventPlan?->price ?? $eventMaster->starting_price ?? 0);
 
         $booking = DB::transaction(function () use (
             $data,
@@ -88,7 +85,7 @@ class EventBookingController extends Controller
                 'event_plan_id' => $eventPlan?->id,
                 'address_id' => $address->id,
 
-                // Keep current admin Event Booking page compatible.
+                // Snapshots keep old/admin records readable if master data changes later.
                 'event_type' => $eventMaster->name,
                 'event_date' => $data['event_date'],
                 'event_time' => $data['event_time'],
@@ -104,69 +101,172 @@ class EventBookingController extends Controller
         return response()->json([
             'message' => 'Event booking submitted successfully.',
             'data' => $booking->load([
-                'eventMaster.photos',
-                'eventMaster.videos',
+                'eventMaster',
                 'eventPlan',
                 'address',
             ]),
         ], 201);
     }
 
+    /**
+     * Return user quotations with SERVER-COMPUTED payment state.
+     *
+     * The app never decides whether a payment is really paid.
+     * Only verified Payment rows are used.
+     */
     public function myQuotations(Request $request): JsonResponse
     {
-        $quotations = Quotation::with([
+        $userId = (int) $request->user()->id;
+
+        $quotations = Quotation::query()
+            ->with([
                 'booking.eventMaster',
                 'booking.eventPlan',
                 'booking.address',
             ])
-            ->whereHas('booking', fn ($q) => $q->where('user_id', $request->user()->id))
+            ->whereHas(
+                'booking',
+                fn ($query) => $query->where('user_id', $userId)
+            )
             ->latest()
             ->get();
 
-        return response()->json($quotations);
+        $data = $quotations
+            ->map(fn (Quotation $quotation) => array_merge(
+                $quotation->toArray(),
+                $this->buildPaymentSummary($quotation, $userId)
+            ))
+            ->values();
+
+        return response()->json([
+            'data' => $data,
+        ]);
     }
 
     /**
-     * Existing quotation-accept flow kept compatible with your current project.
-     * If you already use a live Razorpay order/verification flow, call that flow
-     * instead of creating the mock payment record below.
+     * Shared payment summary used by quotation listing.
      */
-    public function acceptQuotation(Request $request, Quotation $quotation): JsonResponse
-    {
-        $quotation->loadMissing('booking');
+    private function buildPaymentSummary(
+        Quotation $quotation,
+        int $userId
+    ): array {
+        $booking = $quotation->booking;
 
-        abort_unless(
-            $quotation->booking
-            && $quotation->booking->user_id === $request->user()->id,
-            403
+        if (!$booking) {
+            return [
+                'total_amount' => 0,
+                'advance_required_amount' => 0,
+                'advance_paid_amount' => 0,
+                'balance_paid_amount' => 0,
+                'paid_amount' => 0,
+                'remaining_amount' => 0,
+                'is_advance_paid' => false,
+                'is_fully_paid' => false,
+                'can_pay_advance' => false,
+                'can_pay_balance' => false,
+                'payment_status' => 'Pending',
+            ];
+        }
+
+        $total = max(
+            0,
+            round(
+                (float) (
+                    $quotation->total_amount
+                    ?? $quotation->amount
+                    ?? 0
+                ),
+                2
+            )
         );
 
-        DB::transaction(function () use ($request, $quotation): void {
-            $quotation->update([
-                'quotation_status' => 'Accepted',
-            ]);
-
-            $quotation->booking->update([
-                'booking_status' => 'Confirmed',
-            ]);
-
-            Payment::firstOrCreate(
-                [
-                    'user_id' => $request->user()->id,
-                    'payment_type' => 'event_advance',
-                    'reference_id' => $quotation->booking_id,
-                ],
-                [
-                    'amount' => $quotation->advance_amount,
-                    'razorpay_order_id' => 'mock_order_' . uniqid(),
-                    'razorpay_payment_id' => 'mock_payment_' . uniqid(),
-                    'payment_status' => 'Paid',
-                ]
-            );
-        });
-
-        return response()->json(
-            $quotation->fresh()->load('booking')
+        $advanceRequired = min(
+            $total,
+            max(
+                0,
+                round(
+                    (float) ($quotation->advance_amount ?? 0),
+                    2
+                )
+            )
         );
+
+        $payments = Payment::query()
+            ->where('user_id', $userId)
+            ->where('reference_id', $booking->id)
+            ->whereIn('payment_type', [
+                'event_advance',
+                'event_balance',
+                'event_full',
+            ])
+            ->where('payment_status', 'Paid')
+            ->get();
+
+        $advancePaid = (float) $payments
+            ->where('payment_type', 'event_advance')
+            ->sum('amount');
+
+        $balancePaid = (float) $payments
+            ->whereIn('payment_type', ['event_balance', 'event_full'])
+            ->sum('amount');
+
+        $paidAmount = min(
+            $total,
+            max(0, $advancePaid + $balancePaid)
+        );
+
+        $remainingAmount = max(
+            0,
+            round($total - $paidAmount, 2)
+        );
+
+        $isAdvancePaid = $advanceRequired <= 0
+            ? true
+            : ($advancePaid + 0.01 >= $advanceRequired);
+
+        $isFullyPaid = $total > 0
+            && $remainingAmount <= 0.01;
+
+        $quotationStatus = strtolower(
+            trim((string) $quotation->quotation_status)
+        );
+
+        $canStartPayment = in_array(
+            $quotationStatus,
+            [
+                'sent',
+                'quotation sent',
+                'accepted',
+                'approved',
+            ],
+            true
+        );
+
+        return [
+            'total_amount' => $total,
+            'advance_required_amount' => $advanceRequired,
+            'advance_paid_amount' => round($advancePaid, 2),
+            'balance_paid_amount' => round($balancePaid, 2),
+            'paid_amount' => round($paidAmount, 2),
+            'remaining_amount' => $remainingAmount,
+
+            'is_advance_paid' => $isAdvancePaid,
+            'is_fully_paid' => $isFullyPaid,
+
+            'can_pay_advance' => $canStartPayment
+                && !$isAdvancePaid
+                && $advanceRequired > 0,
+
+            'can_pay_balance' => $canStartPayment
+                && $isAdvancePaid
+                && !$isFullyPaid
+                && $remainingAmount > 0,
+
+            'payment_status' => $isFullyPaid
+                ? 'Fully Paid'
+                : ($isAdvancePaid && $paidAmount > 0
+                    ? 'Advance Paid'
+                    : 'Pending'),
+        ];
     }
 }
