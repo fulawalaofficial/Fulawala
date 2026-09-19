@@ -20,6 +20,10 @@
         <div class="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 font-semibold text-green-800">✅ {{ session('success') }}</div>
     @endif
 
+    @if(session('error'))
+        <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 font-semibold text-red-800">⚠️ {{ session('error') }}</div>
+    @endif
+
     <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         @foreach([
             ['label' => 'Total Events', 'value' => $stats['total'], 'icon' => '🎉'],
@@ -62,7 +66,7 @@
 
     <div class="grid grid-cols-1 gap-5 xl:grid-cols-2">
         @forelse($events as $event)
-            <div class="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-sm">
+            <div class="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-sm transition hover:shadow-lg">
                 <div class="grid gap-0 md:grid-cols-[190px_1fr]">
                     <div class="min-h-52 bg-orange-50">
                         @if($event->cover_image_url)
@@ -71,6 +75,7 @@
                             <div class="grid h-full min-h-52 place-items-center text-6xl">🌸</div>
                         @endif
                     </div>
+
                     <div class="p-5">
                         <div class="flex items-start justify-between gap-3">
                             <div>

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class EventMaster extends Model
@@ -56,7 +57,9 @@ class EventMaster extends Model
 
     public function media(): HasMany
     {
-        return $this->hasMany(EventMedia::class)->orderBy('sort_order')->orderBy('id');
+        return $this->hasMany(EventMedia::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     public function photos(): HasMany
@@ -77,7 +80,9 @@ class EventMaster extends Model
 
     public function plans(): HasMany
     {
-        return $this->hasMany(EventPlan::class)->orderBy('sort_order')->orderBy('id');
+        return $this->hasMany(EventPlan::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     public function activePlans(): HasMany
@@ -103,7 +108,13 @@ class EventMaster extends Model
             return $this->cover_image;
         }
 
-        return asset('storage/' . ltrim($this->cover_image, '/'));
+        $storageUrl = Storage::disk('public')->url(ltrim($this->cover_image, '/'));
+
+        if (Str::startsWith($storageUrl, ['http://', 'https://'])) {
+            return $storageUrl;
+        }
+
+        return asset(ltrim($storageUrl, '/'));
     }
 
     public static function uniqueSlug(string $name, ?int $ignoreId = null): string
@@ -112,10 +123,12 @@ class EventMaster extends Model
         $slug = $base;
         $counter = 2;
 
-        while (static::query()
-            ->where('slug', $slug)
-            ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
-            ->exists()) {
+        while (
+            static::query()
+                ->where('slug', $slug)
+                ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
+                ->exists()
+        ) {
             $slug = $base . '-' . $counter;
             $counter++;
         }

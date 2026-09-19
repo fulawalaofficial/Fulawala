@@ -8,6 +8,7 @@ use App\Models\EventMedia;
 use App\Models\EventPlan;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -29,7 +30,10 @@ class EventMasterController extends Controller
                         ->orWhere('description', 'like', "%{$search}%");
                 });
             })
-            ->when(in_array($status, ['active', 'inactive'], true), fn ($q) => $q->where('status', $status))
+            ->when(
+                in_array($status, ['active', 'inactive'], true),
+                fn ($q) => $q->where('status', $status)
+            )
             ->orderBy('sort_order')
             ->latest('id')
             ->paginate(15)
@@ -42,7 +46,12 @@ class EventMasterController extends Controller
             'plans' => EventPlan::count(),
         ];
 
-        return view('admin.event-masters.index', compact('events', 'stats', 'search', 'status'));
+        return view('admin.event-masters.index', compact(
+            'events',
+            'stats',
+            'search',
+            'status'
+        ));
     }
 
     public function create(): View
@@ -54,18 +63,31 @@ class EventMasterController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $this->validateEvent($request);
+        $validated = $this->validateEvent($request);
+        $eventData = $this->eventPayload($validated);
+        $uploadedPaths = [];
 
-        DB::transaction(function () use ($request, $data): void {
-            if ($request->hasFile('cover_image')) {
-                $data['cover_image'] = $request->file('cover_image')->store('events/covers', 'public');
-            }
+        try {
+            DB::transaction(function () use ($request, &$eventData, &$uploadedPaths): void {
+                if ($request->hasFile('cover_image')) {
+                    $path = $request->file('cover_image')->store('events/covers', 'public');
+                    $uploadedPaths[] = $path;
+                    $eventData['cover_image'] = $path;
+                }
 
-            $event = EventMaster::create($data);
+                $event = EventMaster::create($eventData);
 
-            $this->saveMedia($request, $event);
-            $this->syncPlans($request, $event);
-        });
+                $this->saveMedia($request, $event, $uploadedPaths);
+                $this->syncPlans($request, $event);
+            });
+        } catch (\Throwable $e) {
+            $this->cleanupUploadedFiles($uploadedPaths);
+            report($e);
+
+            return back()
+                ->withInput()
+                ->with('error', 'Event could not be saved. Please check the files and try again.');
+        }
 
         return redirect()
             ->route('admin.event-masters.index')
@@ -81,41 +103,67 @@ class EventMasterController extends Controller
 
     public function update(Request $request, EventMaster $eventMaster): RedirectResponse
     {
-        $data = $this->validateEvent($request, $eventMaster->id);
+        $validated = $this->validateEvent($request, $eventMaster->id);
+        $eventData = $this->eventPayload($validated);
+        $uploadedPaths = [];
+        $filesToDeleteAfterCommit = [];
 
-        DB::transaction(function () use ($request, $data, $eventMaster): void {
-            if ($request->boolean('remove_cover') && $eventMaster->cover_image) {
-                Storage::disk('public')->delete($eventMaster->cover_image);
-                $data['cover_image'] = null;
-            }
-
-            if ($request->hasFile('cover_image')) {
-                if ($eventMaster->cover_image) {
-                    Storage::disk('public')->delete($eventMaster->cover_image);
+        try {
+            DB::transaction(function () use (
+                $request,
+                $eventMaster,
+                &$eventData,
+                &$uploadedPaths,
+                &$filesToDeleteAfterCommit
+            ): void {
+                if ($request->boolean('remove_cover') && $eventMaster->cover_image) {
+                    $filesToDeleteAfterCommit[] = $eventMaster->cover_image;
+                    $eventData['cover_image'] = null;
                 }
 
-                $data['cover_image'] = $request->file('cover_image')->store('events/covers', 'public');
-            }
+                if ($request->hasFile('cover_image')) {
+                    if ($eventMaster->cover_image) {
+                        $filesToDeleteAfterCommit[] = $eventMaster->cover_image;
+                    }
 
-            $eventMaster->update($data);
-
-            foreach ((array) $request->input('remove_media', []) as $mediaId) {
-                $media = $eventMaster->media()->whereKey((int) $mediaId)->first();
-
-                if (!$media) {
-                    continue;
+                    $path = $request->file('cover_image')->store('events/covers', 'public');
+                    $uploadedPaths[] = $path;
+                    $eventData['cover_image'] = $path;
                 }
 
-                if ($media->path) {
-                    Storage::disk('public')->delete($media->path);
+                $eventMaster->update($eventData);
+
+                $removeIds = collect((array) $request->input('remove_media', []))
+                    ->map(fn ($id) => (int) $id)
+                    ->filter()
+                    ->unique();
+
+                if ($removeIds->isNotEmpty()) {
+                    $mediaToRemove = $eventMaster->media()
+                        ->whereIn('id', $removeIds->all())
+                        ->get();
+
+                    foreach ($mediaToRemove as $media) {
+                        if ($media->path) {
+                            $filesToDeleteAfterCommit[] = $media->path;
+                        }
+                        $media->delete();
+                    }
                 }
 
-                $media->delete();
-            }
+                $this->saveMedia($request, $eventMaster, $uploadedPaths);
+                $this->syncPlans($request, $eventMaster);
+            });
+        } catch (\Throwable $e) {
+            $this->cleanupUploadedFiles($uploadedPaths);
+            report($e);
 
-            $this->saveMedia($request, $eventMaster);
-            $this->syncPlans($request, $eventMaster);
-        });
+            return back()
+                ->withInput()
+                ->with('error', 'Event could not be updated. Please check the files and try again.');
+        }
+
+        $this->cleanupUploadedFiles(array_values(array_unique($filesToDeleteAfterCommit)));
 
         return redirect()
             ->route('admin.event-masters.edit', $eventMaster)
@@ -126,19 +174,18 @@ class EventMasterController extends Controller
     {
         $eventMaster->load('media');
 
+        $paths = collect([$eventMaster->cover_image])
+            ->merge($eventMaster->media->pluck('path'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         DB::transaction(function () use ($eventMaster): void {
-            if ($eventMaster->cover_image) {
-                Storage::disk('public')->delete($eventMaster->cover_image);
-            }
-
-            foreach ($eventMaster->media as $media) {
-                if ($media->path) {
-                    Storage::disk('public')->delete($media->path);
-                }
-            }
-
             $eventMaster->delete();
         });
+
+        $this->cleanupUploadedFiles($paths);
 
         return redirect()
             ->route('admin.event-masters.index')
@@ -149,11 +196,12 @@ class EventMasterController extends Controller
     {
         abort_unless($media->event_master_id === $eventMaster->id, 404);
 
-        if ($media->path) {
-            Storage::disk('public')->delete($media->path);
-        }
-
+        $path = $media->path;
         $media->delete();
+
+        if ($path) {
+            Storage::disk('public')->delete($path);
+        }
 
         return back()->with('success', 'Event media removed successfully.');
     }
@@ -174,15 +222,43 @@ class EventMasterController extends Controller
             'starting_price' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
-            'cover_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+
+            'cover_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+            'remove_cover' => ['nullable', 'boolean'],
+
             'photos' => ['nullable', 'array', 'max:20'],
-            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+
             'videos' => ['nullable', 'array', 'max:5'],
             'videos.*' => ['file', 'mimes:mp4,mov,webm,m4v', 'max:51200'],
+
             'video_urls' => ['nullable', 'array', 'max:10'],
-            'video_urls.*' => ['nullable', 'url', 'max:1000'],
+            'video_urls.*' => [
+                'nullable',
+                'string',
+                'max:1000',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $url = trim((string) $value);
+
+                    if ($url === '') {
+                        return;
+                    }
+
+                    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                        $fail('Each video link must be a valid URL.');
+                        return;
+                    }
+
+                    $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+                    if (!in_array($scheme, ['http', 'https'], true)) {
+                        $fail('Video links must start with http:// or https://.');
+                    }
+                },
+            ],
+
             'remove_media' => ['nullable', 'array'],
             'remove_media.*' => ['integer'],
+
             'plans' => ['nullable', 'array', 'max:20'],
             'plans.*.id' => ['nullable', 'integer'],
             'plans.*.name' => ['nullable', 'string', 'max:120'],
@@ -191,39 +267,93 @@ class EventMasterController extends Controller
             'plans.*.features_text' => ['nullable', 'string', 'max:5000'],
             'plans.*.status' => ['nullable', Rule::in(['active', 'inactive'])],
             'plans.*.sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
+        ], [
+            'cover_image.max' => 'Cover image must be 8 MB or smaller.',
+            'photos.*.max' => 'Each gallery photo must be 8 MB or smaller.',
+            'videos.*.max' => 'Each video file must be 50 MB or smaller.',
+            'videos.*.mimes' => 'Video must be MP4, MOV, WEBM or M4V.',
         ]);
     }
 
-    private function saveMedia(Request $request, EventMaster $event): void
+    private function eventPayload(array $validated): array
+    {
+        $payload = Arr::only($validated, [
+            'name',
+            'slug',
+            'short_description',
+            'description',
+            'starting_price',
+            'status',
+            'sort_order',
+        ]);
+
+        $payload['slug'] = trim((string) ($payload['slug'] ?? '')) ?: null;
+        $payload['short_description'] = trim((string) ($payload['short_description'] ?? '')) ?: null;
+        $payload['description'] = trim((string) ($payload['description'] ?? '')) ?: null;
+        $payload['starting_price'] = ($payload['starting_price'] ?? '') !== ''
+            ? $payload['starting_price']
+            : null;
+        $payload['sort_order'] = (int) ($payload['sort_order'] ?? 0);
+
+        return $payload;
+    }
+
+    private function saveMedia(Request $request, EventMaster $event, array &$uploadedPaths): void
     {
         $nextSort = ((int) $event->media()->max('sort_order')) + 1;
 
-        foreach ($request->file('photos', []) as $photo) {
+        foreach ((array) $request->file('photos', []) as $photo) {
+            if (!$photo || !$photo->isValid()) {
+                continue;
+            }
+
+            $path = $photo->store('events/photos', 'public');
+            $uploadedPaths[] = $path;
+
             $event->media()->create([
                 'media_type' => 'photo',
-                'path' => $photo->store('events/photos', 'public'),
+                'path' => $path,
+                'title' => pathinfo($photo->getClientOriginalName(), PATHINFO_FILENAME),
                 'sort_order' => $nextSort++,
             ]);
         }
 
-        foreach ($request->file('videos', []) as $video) {
+        foreach ((array) $request->file('videos', []) as $video) {
+            if (!$video || !$video->isValid()) {
+                continue;
+            }
+
+            $path = $video->store('events/videos', 'public');
+            $uploadedPaths[] = $path;
+
             $event->media()->create([
                 'media_type' => 'video',
-                'path' => $video->store('events/videos', 'public'),
+                'path' => $path,
+                'title' => pathinfo($video->getClientOriginalName(), PATHINFO_FILENAME),
                 'sort_order' => $nextSort++,
             ]);
         }
 
         foreach ((array) $request->input('video_urls', []) as $url) {
-            $url = trim((string) $url);
+            $url = $this->normalizeExternalUrl((string) $url);
 
             if ($url === '') {
+                continue;
+            }
+
+            $alreadyExists = $event->media()
+                ->where('media_type', 'video')
+                ->where('external_url', $url)
+                ->exists();
+
+            if ($alreadyExists) {
                 continue;
             }
 
             $event->media()->create([
                 'media_type' => 'video',
                 'external_url' => $url,
+                'title' => $this->externalVideoTitle($url),
                 'sort_order' => $nextSort++,
             ]);
         }
@@ -236,12 +366,13 @@ class EventMasterController extends Controller
         foreach ((array) $request->input('plans', []) as $index => $planData) {
             $name = trim((string) ($planData['name'] ?? ''));
 
-            // Empty plan rows are ignored.
             if ($name === '') {
                 continue;
             }
 
-            $features = collect(preg_split('/\r\n|\r|\n/', (string) ($planData['features_text'] ?? '')))
+            $features = collect(
+                preg_split('/\r\n|\r|\n/', (string) ($planData['features_text'] ?? ''))
+            )
                 ->map(fn ($item) => trim((string) $item))
                 ->filter()
                 ->values()
@@ -250,10 +381,10 @@ class EventMasterController extends Controller
             $payload = [
                 'name' => $name,
                 'price' => ($planData['price'] ?? '') !== '' ? $planData['price'] : null,
-                'description' => $planData['description'] ?? null,
+                'description' => trim((string) ($planData['description'] ?? '')) ?: null,
                 'features' => $features,
                 'status' => $planData['status'] ?? 'active',
-                'sort_order' => $planData['sort_order'] ?? $index,
+                'sort_order' => (int) ($planData['sort_order'] ?? $index),
             ];
 
             $planId = isset($planData['id']) ? (int) $planData['id'] : 0;
@@ -272,12 +403,45 @@ class EventMasterController extends Controller
             $submittedIds[] = $plan->id;
         }
 
-        if ($event->exists) {
-            $query = $event->plans();
-            if ($submittedIds) {
-                $query->whereNotIn('id', $submittedIds);
+        $deleteQuery = $event->plans();
+
+        if ($submittedIds) {
+            $deleteQuery->whereNotIn('id', $submittedIds);
+        }
+
+        $deleteQuery->delete();
+    }
+
+    private function normalizeExternalUrl(string $url): string
+    {
+        $url = trim($url);
+
+        if ($url === '') {
+            return '';
+        }
+
+        // Remove a trailing slash only; keep query parameters because some providers require them.
+        return rtrim($url, '/');
+    }
+
+    private function externalVideoTitle(string $url): string
+    {
+        $host = preg_replace('/^www\./', '', strtolower((string) parse_url($url, PHP_URL_HOST)));
+
+        return match (true) {
+            str_contains((string) $host, 'youtube.com'),
+            $host === 'youtu.be' => 'YouTube video',
+            str_contains((string) $host, 'vimeo.com') => 'Vimeo video',
+            default => 'External video',
+        };
+    }
+
+    private function cleanupUploadedFiles(array $paths): void
+    {
+        foreach ($paths as $path) {
+            if ($path) {
+                Storage::disk('public')->delete($path);
             }
-            $query->delete();
         }
     }
 }
