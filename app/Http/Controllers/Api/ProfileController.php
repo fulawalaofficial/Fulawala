@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
@@ -32,6 +33,83 @@ class ProfileController extends Controller
             'message' => 'Profile fetched successfully.',
             'data' => $this->profilePayload($freshUser),
         ]);
+    }
+
+    /**
+     * Update authenticated user's editable account details.
+     *
+     * Role is intentionally not accepted here. A customer must not be able
+     * to promote/change their own role from the mobile application.
+     */
+    public function update(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return $this->unauthenticatedResponse();
+        }
+
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'min:2',
+                'max:120',
+            ],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:190',
+                Rule::unique('users', 'email')->ignore($user->id),
+            ],
+            'mobile' => [
+                'required',
+                'string',
+                'regex:/^[6-9][0-9]{9}$/',
+                Rule::unique('users', 'mobile')->ignore($user->id),
+            ],
+        ], [
+            'name.required' => 'Full name is required.',
+            'name.min' => 'Full name must contain at least 2 characters.',
+            'email.required' => 'Email address is required.',
+            'email.email' => 'Please enter a valid email address.',
+            'email.unique' => 'This email address is already registered with another account.',
+            'mobile.required' => 'Mobile number is required.',
+            'mobile.regex' => 'Please enter a valid 10-digit Indian mobile number.',
+            'mobile.unique' => 'This mobile number is already registered with another account.',
+        ]);
+
+        try {
+            $user->forceFill([
+                'name' => trim($validated['name']),
+                'email' => strtolower(trim($validated['email'])),
+                'mobile' => preg_replace('/\D+/', '', $validated['mobile']),
+            ])->saveOrFail();
+
+            $freshUser = $user->fresh(['addresses']);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Account details updated successfully.',
+                'data' => $this->profilePayload($freshUser),
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Profile account-details update failed.', [
+                'user_id' => $user->id,
+                'exception_message' => $exception->getMessage(),
+                'exception_file' => $exception->getFile(),
+                'exception_line' => $exception->getLine(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to update account details.',
+                'error' => config('app.debug')
+                    ? $exception->getMessage()
+                    : null,
+            ], 500);
+        }
     }
 
     /**
@@ -82,10 +160,6 @@ class ProfileController extends Controller
             abort(404, 'Profile photo not found.');
         }
 
-        /*
-         * Current storage:
-         * storage/app/public/profile-photos/{filename}
-         */
         $storagePath = 'profile-photos/' . $safeFilename;
 
         if (Storage::disk('public')->exists($storagePath)) {
@@ -97,10 +171,6 @@ class ProfileController extends Controller
             ]);
         }
 
-        /*
-         * Backward compatibility:
-         * public/uploads/profile-photos/{filename}
-         */
         $oldPublicPath = public_path(
             'uploads/profile-photos/' . $safeFilename
         );
@@ -179,10 +249,6 @@ class ProfileController extends Controller
                 $extension
             );
 
-            /*
-             * Save to:
-             * storage/app/public/profile-photos
-             */
             $newPhotoPath = $uploadedFile->storeAs(
                 'profile-photos',
                 $filename,
@@ -307,8 +373,6 @@ class ProfileController extends Controller
     /**
      * Convert the Eloquent user model to API data and ALWAYS append
      * a usable public profile_photo_url.
-     *
-     * This avoids requiring a User-model accessor.
      */
     private function profilePayload(?Model $user): ?array
     {

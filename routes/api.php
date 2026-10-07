@@ -37,10 +37,6 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword'])
 |--------------------------------------------------------------------------
 | Razorpay Webhook
 |--------------------------------------------------------------------------
-|
-| Public because Razorpay servers call it.
-| Your RazorpayWebhookController must verify X-Razorpay-Signature.
-|
 */
 
 Route::post(
@@ -80,11 +76,6 @@ Route::get(
 |--------------------------------------------------------------------------
 | Authenticated Application Routes
 |--------------------------------------------------------------------------
-|
-| IMPORTANT:
-| This is intentionally ONE auth:sanctum group.
-| Your previous api.php had duplicate event/address/quotation routes.
-|
 */
 
 Route::middleware('auth:sanctum')->group(function (): void {
@@ -114,6 +105,13 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get(
         '/profile',
         [ProfileController::class, 'show']
+    );
+
+    // NEW: edit Full Name, Email Address and Mobile Number.
+    Route::match(
+        ['put', 'patch'],
+        '/profile',
+        [ProfileController::class, 'update']
     );
 
     Route::get(
@@ -168,7 +166,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
         [AddressController::class, 'store']
     );
 
-    // Legacy alias retained for existing app screens.
     Route::post(
         '/addresses-create',
         [AddressController::class, 'store']
@@ -247,13 +244,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     |--------------------------------------------------------------------------
     | Event Quotation Razorpay
     |--------------------------------------------------------------------------
-    |
-    | Old MOCK endpoint removed:
-    |
-    | POST /quotations/{quotation}/accept
-    |
-    | Advance/full payment now uses real Razorpay order + verification.
-    |
     */
 
     Route::post(
@@ -286,9 +276,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     |--------------------------------------------------------------------------
     | Existing Subscription / General Razorpay Payment Endpoints
     |--------------------------------------------------------------------------
-    |
-    | Kept unchanged so your current subscription payment flow continues working.
-    |
     */
 
     Route::post(
