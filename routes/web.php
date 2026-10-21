@@ -84,6 +84,7 @@ Route::prefix('admin')
         */
 
         Route::resource('pooja-packets', PoojaPacketController::class)
+            ->parameters(['pooja-packets' => 'poojaPacket'])
             ->except(['show']);
 
 

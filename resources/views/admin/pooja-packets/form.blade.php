@@ -10,6 +10,7 @@
         foreach (old('flower_ids') as $index => $flowerId) {
             $items[] = [
                 'flower_id' => $flowerId,
+                'flower_name' => old('flower_names.' . $index),
                 'unit' => old('flower_units.' . $index),
                 'quantity' => old('quantities.' . $index),
                 'price' => old('prices.' . $index),
@@ -24,6 +25,7 @@
     if (empty($items)) {
         $items[] = [
             'flower_id' => '',
+            'flower_name' => '',
             'unit' => '',
             'quantity' => '',
             'price' => '',
@@ -47,7 +49,7 @@
                 {{ $packet->exists ? 'Edit Pooja Package' : 'Add Pooja Package' }}
             </h1>
             <p class="text-slate-500 mt-1">
-                Select flowers, enter quantity, and package total will calculate automatically.
+                Edit flowers, quantities, image, and package selling prices. Your manual plan prices will be saved.
             </p>
         </div>
 
@@ -100,6 +102,7 @@
                     <select name="package_type"
                             class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                         <option value="Monthly" {{ $selectedPackageType == 'Monthly' ? 'selected' : '' }}>Monthly</option>
+                        <option value="Two Month" {{ $selectedPackageType == 'Two Month' ? 'selected' : '' }}>Two Month</option>
                         <option value="Three Month" {{ $selectedPackageType == 'Three Month' ? 'selected' : '' }}>Three Month</option>
                         <option value="Six Month" {{ $selectedPackageType == 'Six Month' ? 'selected' : '' }}>Six Month</option>
                         <option value="One Year" {{ $selectedPackageType == 'One Year' ? 'selected' : '' }}>One Year</option>
@@ -107,29 +110,37 @@
                 </div>
 
                 <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Auto Package MRP</label>
+                    <label class="block text-sm font-black text-slate-700 mb-1">Package MRP (editable)</label>
                     <div class="relative">
                         <span class="absolute left-4 top-3 text-slate-400 font-bold">₹</span>
-                        <input type="text"
+                        <input type="number"
+                               step="0.01" min="0" name="mrp_price"
                                id="packageMrpDisplay"
-                               value="{{ old('mrp_price', $packet->mrp_price) }}"
-                               readonly
+                               value="{{ old('mrp_price', $packet->exists ? $packet->mrp_price : '') }}"
                                class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 font-black text-slate-800 outline-none">
                     </div>
-                    <p class="text-xs text-slate-500 mt-1">Calculated from flower MRP × quantity.</p>
+                    <p class="text-xs text-slate-500 mt-1">Auto-fills from flower totals until you change it manually.</p>
                 </div>
 
                 <div>
-                    <label class="block text-sm font-black text-slate-700 mb-1">Auto Package Sale Price</label>
+                    <label class="block text-sm font-black text-slate-700 mb-1">Package Sale Price (editable)</label>
                     <div class="relative">
                         <span class="absolute left-4 top-3 text-green-500 font-bold">₹</span>
-                        <input type="text"
+                        <input type="number"
+                               step="0.01" min="0" name="sale_price"
                                id="packageSaleDisplay"
-                               value="{{ old('sale_price', $packet->sale_price) }}"
-                               readonly
+                               value="{{ old('sale_price', $packet->exists ? $packet->sale_price : '') }}"
                                class="w-full bg-green-50 border border-green-200 rounded-xl pl-8 pr-4 py-3 font-black text-green-700 outline-none">
                     </div>
-                    <p class="text-xs text-slate-500 mt-1">This amount will save as package sale price.</p>
+                    <p class="text-xs text-slate-500 mt-1">This editable amount is saved as the actual subscription plan price.</p>
+                </div>
+
+                <div class="md:col-span-2 flex flex-wrap items-center gap-3">
+                    <button type="button" id="useFlowerTotals"
+                            class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-700">
+                        Use Flower Totals for Package Prices
+                    </button>
+                    <p class="text-xs text-slate-500">For fixed subscription plans, type your own MRP and sale price instead.</p>
                 </div>
 
                 <div>
@@ -141,7 +152,7 @@
 
                     @if($packet->image)
                         <div class="mt-3">
-                            <img src="{{ asset($packet->image) }}"
+                            <img src="{{ $packet->image_url }}"
                                  alt="Package Photo"
                                  class="w-28 h-28 rounded-2xl object-cover border border-orange-100">
                         </div>
@@ -172,7 +183,7 @@
                 <div>
                     <h2 class="text-xl font-black text-slate-900">Package Flowers</h2>
                     <p class="text-sm text-slate-500 mt-1">
-                        Select flower and quantity. Unit, price and totals will fill automatically.
+                        Select existing flowers or enter a manual flower name for older packages. Flower totals are estimates; package prices remain editable.
                     </p>
                 </div>
 
@@ -216,7 +227,7 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 border-b border-slate-200">
                             <tr>
-                                <th class="p-3 text-left min-w-[250px]">Flower *</th>
+                                <th class="p-3 text-left min-w-[300px]">Flower / Manual Name *</th>
                                 <th class="p-3 text-left min-w-[100px]">Unit *</th>
                                 <th class="p-3 text-left min-w-[110px]">Quantity *</th>
                                 <th class="p-3 text-left min-w-[120px]">Unit Price *</th>
@@ -239,10 +250,14 @@
                                                         data-unit="{{ $flower->unit }}"
                                                         data-price="{{ $flower->price }}"
                                                         {{ (string)($item['flower_id'] ?? '') == (string)$flower->id ? 'selected' : '' }}>
-                                                    {{ $flower->flower_name }} - ₹{{ $flower->price }} / {{ $flower->unit }}
+                                                    {{ $flower->flower_name }}{{ $flower->status === 'Inactive' ? ' (Inactive)' : '' }} - ₹{{ $flower->price }} / {{ $flower->unit }}
                                                 </option>
                                             @endforeach
                                         </select>
+                                        <input type="text" name="flower_names[]"
+                                               value="{{ empty($item['flower_id']) || !$flowers->contains('id', (int) $item['flower_id']) ? ($item['flower_name'] ?? '') : '' }}"
+                                               placeholder="Or enter a flower name (legacy package)"
+                                               class="custom-name-input w-full mt-2 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:border-orange-500 outline-none">
                                     </td>
 
                                     <td class="p-3">
@@ -313,7 +328,7 @@
                 </div>
 
                 <p class="text-xs text-slate-500 mt-3">
-                    Tip: Select a flower first. Unit price, MRP and sale price will auto-fill. Change quantity to update total.
+                    Tip: Changing the flower resets that row prices to the catalog default. Existing rows keep their saved prices until you change the flower.
                 </p>
             </div>
         </div>
@@ -351,10 +366,13 @@
                     <option value="{{ $flower->id }}"
                             data-unit="{{ $flower->unit }}"
                             data-price="{{ $flower->price }}">
-                        {{ $flower->flower_name }} - ₹{{ $flower->price }} / {{ $flower->unit }}
+                        {{ $flower->flower_name }}{{ $flower->status === 'Inactive' ? ' (Inactive)' : '' }} - ₹{{ $flower->price }} / {{ $flower->unit }}
                     </option>
                 @endforeach
             </select>
+            <input type="text" name="flower_names[]"
+                   placeholder="Or type flower name"
+                   class="custom-name-input w-full mt-2 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:border-orange-500 outline-none">
         </td>
 
         <td class="p-3">
@@ -413,6 +431,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const totalSale = document.getElementById('totalSale');
     const totalSaving = document.getElementById('totalSaving');
     const footerSaleTotal = document.getElementById('footerSaleTotal');
+    const useFlowerTotals = document.getElementById('useFlowerTotals');
+    let mrpOverridden = packageMrpDisplay.value.trim() !== '';
+    let saleOverridden = packageSaleDisplay.value.trim() !== '';
+
+    packageMrpDisplay.addEventListener('input', function () { mrpOverridden = true; calculateTotals(); });
+    packageSaleDisplay.addEventListener('input', function () { saleOverridden = true; calculateTotals(); });
+    useFlowerTotals.addEventListener('click', function () {
+        mrpOverridden = false;
+        saleOverridden = false;
+        calculateTotals();
+    });
 
     function amount(value) {
         const number = parseFloat(value);
@@ -439,6 +468,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const priceInput = row.querySelector('.price-input');
         const mrpInput = row.querySelector('.mrp-input');
         const saleInput = row.querySelector('.sale-input');
+        const manualNameInput = row.querySelector('.custom-name-input');
+        if (manualNameInput) manualNameInput.value = '';
 
         unitInput.value = unit;
         priceInput.value = money(price);
@@ -467,8 +498,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const saleInput = row.querySelector('.sale-input');
             const lineTotal = row.querySelector('.line-total');
 
-            const hasFlower = flowerSelect && flowerSelect.value;
-            const qty = amount(qtyInput ? qtyInput.value : 0);
+            const manualName = row.querySelector('.custom-name-input');
+            const hasFlower = (flowerSelect && flowerSelect.value) || (manualName && manualName.value.trim());
+            const qty = hasFlower ? amount(qtyInput ? qtyInput.value : 0) : 0;
             const unitPrice = amount(priceInput ? priceInput.value : 0);
             const mrp = amount(mrpInput ? mrpInput.value : unitPrice);
             const sale = amount(saleInput ? saleInput.value : unitPrice);
@@ -493,10 +525,10 @@ document.addEventListener('DOMContentLoaded', function () {
         totalMrp.textContent = money(mrpTotal);
         totalSale.textContent = money(saleTotal);
         totalSaving.textContent = money(savingTotal > 0 ? savingTotal : 0);
-        footerSaleTotal.textContent = money(saleTotal);
+        footerSaleTotal.textContent = money(saleOverridden ? packageSaleDisplay.value : saleTotal);
 
-        packageMrpDisplay.value = money(mrpTotal);
-        packageSaleDisplay.value = money(saleTotal);
+        if (!mrpOverridden) packageMrpDisplay.value = money(mrpTotal);
+        if (!saleOverridden) packageSaleDisplay.value = money(saleTotal);
     }
 
     function bindRowEvents(row) {

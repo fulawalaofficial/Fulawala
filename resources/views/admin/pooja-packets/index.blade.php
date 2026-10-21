@@ -59,6 +59,7 @@
                         class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none">
                     <option value="">All Types</option>
                     <option value="Monthly" {{ ($packageType ?? '') == 'Monthly' ? 'selected' : '' }}>Monthly</option>
+                    <option value="Two Month" {{ ($packageType ?? '') == 'Two Month' ? 'selected' : '' }}>Two Month</option>
                     <option value="Three Month" {{ ($packageType ?? '') == 'Three Month' ? 'selected' : '' }}>Three Month</option>
                     <option value="Six Month" {{ ($packageType ?? '') == 'Six Month' ? 'selected' : '' }}>Six Month</option>
                     <option value="One Year" {{ ($packageType ?? '') == 'One Year' ? 'selected' : '' }}>One Year</option>
