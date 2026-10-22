@@ -184,7 +184,7 @@ class CustomOrderController extends Controller
                 }
 
                 $subtotal = round($subtotal, 2);
-                $deliveryCharge = $subtotal > 0 ? 40.00 : 0.00;
+                $deliveryCharge = $subtotal > 0 ? 0.00 : 0.00;
                 $totalAmount = round(
                     $subtotal + $deliveryCharge,
                     2
