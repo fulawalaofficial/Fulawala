@@ -15,281 +15,82 @@ use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| Public authentication routes
-|--------------------------------------------------------------------------
-*/
+/* Public authentication routes */
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:3,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:3,1');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
 
-Route::post('/register', [AuthController::class, 'register'])
-    ->middleware('throttle:3,1');
+/* Razorpay webhook */
+Route::post('/razorpay/webhook', [RazorpayWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1');
 
-Route::post('/login', [AuthController::class, 'login'])
-    ->middleware('throttle:5,1');
+/* Public flower catalogue and banner slider */
+Route::get('/flower-package', [PoojaPacketController::class, 'index']);
+Route::get('/pooja-packets/{poojaPacket}', [PoojaPacketController::class, 'show'])
+    ->whereNumber('poojaPacket');
+Route::get('/flowers', [FlowerProductController::class, 'index']);
 
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
-    ->middleware('throttle:3,1');
+// New public banner API: a token is not required to display promotional artwork.
+Route::get('/home/banners', [HomeController::class, 'banners']);
 
-Route::post('/reset-password', [AuthController::class, 'resetPassword'])
-    ->middleware('throttle:5,1');
-
-/*
-|--------------------------------------------------------------------------
-| Razorpay Webhook
-|--------------------------------------------------------------------------
-*/
-
-Route::post(
-    '/razorpay/webhook',
-    [RazorpayWebhookController::class, 'handle']
-)->middleware('throttle:120,1');
-
-/*
-|--------------------------------------------------------------------------
-| Public product routes
-|--------------------------------------------------------------------------
-*/
-
-Route::get(
-    '/flower-package',
-    [PoojaPacketController::class, 'index']
-);
-
-Route::get(
-    '/pooja-packets/{poojaPacket}',
-    [PoojaPacketController::class, 'show']
-)->whereNumber('poojaPacket');
-
-Route::get(
-    '/flowers',
-    [FlowerProductController::class, 'index']
-);
-
-Route::get(
-    '/profile-images/{filename}',
-    [ProfileController::class, 'showPhotoFile']
-)
+Route::get('/profile-images/{filename}', [ProfileController::class, 'showPhotoFile'])
     ->where('filename', '[A-Za-z0-9._-]+')
     ->name('profile.images.show');
 
-/*
-|--------------------------------------------------------------------------
-| Authenticated Application Routes
-|--------------------------------------------------------------------------
-*/
-
 Route::middleware('auth:sanctum')->group(function (): void {
+    /* Home */
+    Route::get('/home', [HomeController::class, 'currentMonthSubscriptions']);
+    Route::get('/home/current-month-subscriptions', [HomeController::class, 'currentMonthSubscriptions']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Home
-    |--------------------------------------------------------------------------
-    */
+    /* Profile */
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::match(['put', 'patch'], '/profile', [ProfileController::class, 'update']);
+    Route::get('/profile/photo', [ProfileController::class, 'getPhoto']);
+    Route::post('/profile/photo', [ProfileController::class, 'updatePhoto']);
+    Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto']);
+    Route::delete('/profile/photo-delete', [ProfileController::class, 'deletePhoto']);
 
-    Route::get(
-        '/home',
-        [HomeController::class, 'currentMonthSubscriptions']
-    );
+    /* Authentication / device */
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/device-token', [AuthController::class, 'updateDeviceToken']);
 
-    Route::get(
-        '/home/current-month-subscriptions',
-        [HomeController::class, 'currentMonthSubscriptions']
-    );
+    /* Addresses */
+    Route::get('/addresses', [AddressController::class, 'index']);
+    Route::post('/addresses', [AddressController::class, 'store']);
+    Route::post('/addresses-create', [AddressController::class, 'store']);
+    Route::get('/addresses/{address}', [AddressController::class, 'show'])->whereNumber('address');
+    Route::match(['put', 'patch'], '/addresses/{address}', [AddressController::class, 'update'])
+        ->whereNumber('address');
+    Route::patch('/addresses/{address}/default', [AddressController::class, 'makeDefault'])
+        ->whereNumber('address');
+    Route::delete('/addresses/{address}', [AddressController::class, 'destroy'])->whereNumber('address');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Profile
-    |--------------------------------------------------------------------------
-    */
+    /* Customized flower orders */
+    Route::post('/custom-orders', [CustomOrderController::class, 'store']);
+    Route::get('/my-orders', [CustomOrderController::class, 'myOrders']);
 
-    Route::get(
-        '/profile',
-        [ProfileController::class, 'show']
-    );
+    /* Event master */
+    Route::get('/event-masters', [EventMasterController::class, 'index']);
+    Route::get('/event-masters/{eventMaster}', [EventMasterController::class, 'show'])
+        ->whereNumber('eventMaster');
 
-    // NEW: edit Full Name, Email Address and Mobile Number.
-    Route::match(
-        ['put', 'patch'],
-        '/profile',
-        [ProfileController::class, 'update']
-    );
+    /* Event bookings */
+    Route::post('/event-bookings', [EventBookingController::class, 'store']);
+    Route::get('/my-quotations', [EventBookingController::class, 'myQuotations']);
 
-    Route::get(
-        '/profile/photo',
-        [ProfileController::class, 'getPhoto']
-    );
+    /* Event quotation payment */
+    Route::post('/quotations/{quotation}/payment-order', [EventQuotationPaymentController::class, 'createOrder'])
+        ->whereNumber('quotation');
+    Route::post('/quotations/{quotation}/payments/verify', [EventQuotationPaymentController::class, 'verify'])
+        ->whereNumber('quotation');
 
-    Route::post(
-        '/profile/photo',
-        [ProfileController::class, 'updatePhoto']
-    );
+    /* Subscriptions */
+    Route::post('/subscriptions', [SubscriptionController::class, 'store']);
+    Route::get('/my-subscriptions', [SubscriptionController::class, 'mySubscriptions']);
 
-    Route::delete(
-        '/profile/photo',
-        [ProfileController::class, 'deletePhoto']
-    );
-
-    Route::delete(
-        '/profile/photo-delete',
-        [ProfileController::class, 'deletePhoto']
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Authentication / Device
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post(
-        '/logout',
-        [AuthController::class, 'logout']
-    );
-
-    Route::post(
-        '/device-token',
-        [AuthController::class, 'updateDeviceToken']
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Addresses
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get(
-        '/addresses',
-        [AddressController::class, 'index']
-    );
-
-    Route::post(
-        '/addresses',
-        [AddressController::class, 'store']
-    );
-
-    Route::post(
-        '/addresses-create',
-        [AddressController::class, 'store']
-    );
-
-    Route::get(
-        '/addresses/{address}',
-        [AddressController::class, 'show']
-    )->whereNumber('address');
-
-    Route::match(
-        ['put', 'patch'],
-        '/addresses/{address}',
-        [AddressController::class, 'update']
-    )->whereNumber('address');
-
-    Route::patch(
-        '/addresses/{address}/default',
-        [AddressController::class, 'makeDefault']
-    )->whereNumber('address');
-
-    Route::delete(
-        '/addresses/{address}',
-        [AddressController::class, 'destroy']
-    )->whereNumber('address');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Custom Orders
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post(
-        '/custom-orders',
-        [CustomOrderController::class, 'store']
-    );
-
-    Route::get(
-        '/my-orders',
-        [CustomOrderController::class, 'myOrders']
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Event Master
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get(
-        '/event-masters',
-        [EventMasterController::class, 'index']
-    );
-
-    Route::get(
-        '/event-masters/{eventMaster}',
-        [EventMasterController::class, 'show']
-    )->whereNumber('eventMaster');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Event Booking
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post(
-        '/event-bookings',
-        [EventBookingController::class, 'store']
-    );
-
-    Route::get(
-        '/my-quotations',
-        [EventBookingController::class, 'myQuotations']
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Event Quotation Razorpay
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post(
-        '/quotations/{quotation}/payment-order',
-        [EventQuotationPaymentController::class, 'createOrder']
-    )->whereNumber('quotation');
-
-    Route::post(
-        '/quotations/{quotation}/payments/verify',
-        [EventQuotationPaymentController::class, 'verify']
-    )->whereNumber('quotation');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Subscriptions
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post(
-        '/subscriptions',
-        [SubscriptionController::class, 'store']
-    );
-
-    Route::get(
-        '/my-subscriptions',
-        [SubscriptionController::class, 'mySubscriptions']
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Existing Subscription / General Razorpay Payment Endpoints
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post(
-        '/payments/create-order',
-        [PaymentController::class, 'createOrder']
-    );
-
-    Route::post(
-        '/payments/verify',
-        [PaymentController::class, 'verify']
-    );
-
-    Route::get(
-        '/payments/history',
-        [PaymentController::class, 'history']
-    );
+    /* General Razorpay */
+    Route::post('/payments/create-order', [PaymentController::class, 'createOrder']);
+    Route::post('/payments/verify', [PaymentController::class, 'verify']);
+    Route::get('/payments/history', [PaymentController::class, 'history']);
 });

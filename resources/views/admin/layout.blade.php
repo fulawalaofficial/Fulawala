@@ -76,6 +76,13 @@
             'desc' => 'Products',
         ],
         [
+            'label' => 'Home Banners',
+            'route' => 'admin.home-banners.index',
+            'active' => 'admin.home-banners.*',
+            'icon' => '🖼️',
+            'desc' => 'Slider Master',
+        ],
+        [
             'label' => 'Custom Orders',
             'route' => 'admin.custom-orders.index',
             'active' => 'admin.custom-orders.*',

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CustomOrder;
+use App\Models\HomeBanner;
 use App\Models\Subscription;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,19 +14,61 @@ use Throwable;
 class HomeController extends Controller
 {
     /**
-     * Return home-page data for the authenticated user.
-     *
-     * Includes:
-     * 1. Current-month active subscriptions
-     * 2. Current-month customized flower orders
+     * Public API for the mobile home slider: GET /api/home/banners.
+     * Admin manages images, destinations, active flags and schedule.
      */
-    public function currentMonthSubscriptions(
-        Request $request
-    ): JsonResponse {
+    public function banners(): JsonResponse
+    {
         try {
-            /*
-             * Get authenticated user from the Sanctum token.
-             */
+            $now = Carbon::now();
+
+            $banners = HomeBanner::query()
+                ->where('is_active', true)
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('starts_at')
+                        ->orWhere('starts_at', '<=', $now);
+                })
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('ends_at')
+                        ->orWhere('ends_at', '>=', $now);
+                })
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(function (HomeBanner $banner): array {
+                    return [
+                        'id' => $banner->id,
+                        'title' => $banner->title,
+                        'image_url' => $banner->image_url,
+                        'target_screen' => $banner->target_screen,
+                        'sort_order' => $banner->sort_order,
+                        'updated_at' => $banner->updated_at?->toIso8601String(),
+                    ];
+                })->values();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Home banners fetched successfully.',
+                'data' => $banners,
+            ])->header('Cache-Control', 'no-store, max-age=0');
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to load home banners.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Return home-page data for the authenticated user.
+     * Includes current-month active subscriptions and customized flower orders.
+     */
+    public function currentMonthSubscriptions(Request $request): JsonResponse
+    {
+        try {
             $user = $request->user();
 
             if (!$user) {
@@ -35,113 +78,51 @@ class HomeController extends Controller
                 ], 401);
             }
 
-            /*
-             * Current date according to config/app.php timezone.
-             */
             $now = Carbon::now();
+            $monthStart = $now->copy()->startOfMonth()->toDateString();
+            $monthEnd = $now->copy()->endOfMonth()->toDateString();
 
-            $monthStart = $now
-                ->copy()
-                ->startOfMonth()
-                ->toDateString();
-
-            $monthEnd = $now
-                ->copy()
-                ->endOfMonth()
-                ->toDateString();
-
-            /*
-             * Get paid and active subscriptions that overlap
-             * with the current month.
-             */
             $subscriptions = Subscription::query()
                 ->where('user_id', $user->id)
                 ->where('payment_status', 'Paid')
                 ->where('subscription_status', 'Active')
                 ->whereDate('start_date', '<=', $monthEnd)
                 ->whereDate('end_date', '>=', $monthStart)
-                ->with([
-                    'packet',
-                    'address',
-                ])
+                ->with(['packet', 'address'])
                 ->orderByDesc('start_date')
                 ->get();
 
-            /*
-             * Get customized flower orders belonging to the user.
-             *
-             * The orders are filtered by current-month delivery date.
-             * Every order includes its address, items and flower details.
-             */
             $customOrders = CustomOrder::query()
                 ->where('user_id', $user->id)
                 ->whereDate('delivery_date', '>=', $monthStart)
                 ->whereDate('delivery_date', '<=', $monthEnd)
-                ->with([
-                    'address',
-                    'items.flower',
-                ])
+                ->with(['address', 'items.flower'])
                 ->orderByDesc('delivery_date')
                 ->orderByDesc('id')
                 ->get();
 
-            /*
-             * Customized-order status summary.
-             */
             $customOrderSummary = [
-                'order_placed' => $customOrders
-                    ->where('order_status', 'Order Placed')
-                    ->count(),
-
-                'confirmed' => $customOrders
-                    ->where('order_status', 'Confirmed')
-                    ->count(),
-
-                'preparing' => $customOrders
-                    ->where('order_status', 'Preparing')
-                    ->count(),
-
-                'ready_for_delivery' => $customOrders
-                    ->where('order_status', 'Ready for Delivery')
-                    ->count(),
-
-                'out_for_delivery' => $customOrders
-                    ->where('order_status', 'Out for Delivery')
-                    ->count(),
-
-                'delivered' => $customOrders
-                    ->where('order_status', 'Delivered')
-                    ->count(),
-
-                'cancelled' => $customOrders
-                    ->where('order_status', 'Cancelled')
-                    ->count(),
+                'order_placed' => $customOrders->where('order_status', 'Order Placed')->count(),
+                'confirmed' => $customOrders->where('order_status', 'Confirmed')->count(),
+                'preparing' => $customOrders->where('order_status', 'Preparing')->count(),
+                'ready_for_delivery' => $customOrders->where('order_status', 'Ready for Delivery')->count(),
+                'out_for_delivery' => $customOrders->where('order_status', 'Out for Delivery')->count(),
+                'delivered' => $customOrders->where('order_status', 'Delivered')->count(),
+                'cancelled' => $customOrders->where('order_status', 'Cancelled')->count(),
             ];
 
             return response()->json([
                 'status' => true,
                 'message' => 'Home data fetched successfully.',
-
                 'month' => $now->format('F Y'),
-
                 'period' => [
                     'start_date' => $monthStart,
                     'end_date' => $monthEnd,
                 ],
-
-                /*
-                 * Subscription data.
-                 *
-                 * The original "data" key is maintained so existing
-                 * mobile-application code continues working.
-                 */
                 'has_subscription' => $subscriptions->isNotEmpty(),
                 'total_subscriptions' => $subscriptions->count(),
+                // Existing "data" key is kept for mobile backward compatibility.
                 'data' => $subscriptions,
-
-                /*
-                 * Customized-order data.
-                 */
                 'has_custom_orders' => $customOrders->isNotEmpty(),
                 'total_custom_orders' => $customOrders->count(),
                 'custom_order_summary' => $customOrderSummary,
@@ -153,10 +134,7 @@ class HomeController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Unable to fetch home data.',
-
-                'error' => config('app.debug')
-                    ? $e->getMessage()
-                    : null,
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EventBookingController;
 use App\Http\Controllers\Admin\EventMasterController;
 use App\Http\Controllers\Admin\FlowerProductController;
+use App\Http\Controllers\Admin\HomeBannerController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\PoojaPacketController;
 use App\Http\Controllers\Admin\QuotationController;
@@ -95,6 +96,12 @@ Route::prefix('admin')
         */
 
         Route::resource('flowers', FlowerProductController::class)
+            ->except(['show']);
+
+
+        /* Home Banner Master: images, click destinations and display order */
+        Route::resource('home-banners', HomeBannerController::class)
+            ->parameters(['home-banners' => 'homeBanner'])
             ->except(['show']);
 
 
